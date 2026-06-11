@@ -1,0 +1,16 @@
+# Python virtual environments
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# IDEs dhe OS
+.vscode/
+.idea/
+.DS_Store
+
+# ICRAS Project runtime files (mos i bëni commit run-et lokale)
+runs/
+
+# OpenAI API key ose sekrete të tjera lokale
+.env

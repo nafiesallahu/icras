@@ -2,9 +2,6 @@
 
 Intelligent Contract Risk Analysis System.
 
-## Jira Task
-
-IC-1: Repository Onboarding & Local Directory Architecture Initialization
 
 ## Description
 

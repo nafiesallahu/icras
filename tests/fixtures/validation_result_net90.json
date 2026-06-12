@@ -1,0 +1,27 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_003",
+    "validation_status": "completed_with_findings",
+    "normalized_fields": {
+        "payment_terms_days": 90,
+        "governing_law": "Germany",
+        "effective_date": "2026-06-01",
+        "liability_cap_present": true,
+        "gdpr_clause_present": true,
+        "auto_renewal_present": false,
+        "opt_out_window_days": null,
+        "counterparty_name": "Acme Services GmbH",
+        "has_low_confidence_extraction": false
+    },
+    "findings": [
+        {
+            "finding_id": "VAL-001",
+            "field": "payment_terms_days",
+            "severity": "medium",
+            "message": "Payment terms extracted and normalized to 90 days.",
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_001",
+            "clause_id": "payment_terms_001",
+            "page_number": 3
+        }
+    ]
+}

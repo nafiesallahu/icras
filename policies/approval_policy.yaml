@@ -1,0 +1,52 @@
+version: "1.0"
+owner: "ICRAS Team"
+description: "Approval routing policy based on contract risk level and risk category."
+
+approval_rules:
+  - risk_level: "low"
+    action: "auto_approve"
+    approver: "none"
+
+  - risk_level: "medium"
+    action: "manager_review"
+    approver: "procurement_manager"
+
+  - risk_level: "high"
+    category: "legal"
+    action: "legal_review"
+    approver: "legal_team"
+
+  - risk_level: "high"
+    category: "finance"
+    action: "finance_review"
+    approver: "finance_team"
+
+  - risk_level: "high"
+    category: "compliance"
+    action: "compliance_review"
+    approver: "compliance_team"
+
+  - risk_level: "critical"
+    action: "executive_review"
+    approver: "executive_committee"
+
+department_routing:
+  finance:
+    triggers:
+      - "payment_terms_exceeded"
+
+  legal:
+    triggers:
+      - "missing_liability_cap"
+      - "missing_governing_law"
+      - "auto_renewal_without_opt_out"
+
+  compliance:
+    triggers:
+      - "high_risk_jurisdiction"
+      - "missing_gdpr_clause"
+
+  procurement:
+    triggers:
+      - "unknown_vendor"
+      - "medium_risk_contract"

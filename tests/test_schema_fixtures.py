@@ -8,12 +8,12 @@ from app.schemas.validation_result import ValidationResult
 # This test file proves that the mock JSON fixtures match the Pydantic schemas.
 # It also proves that strict validation rejects unexpected fields.
 
-FIXTURES_DIR = Path("tests/fixtures")
+FIXTURES_DIR = Path("data/synthetic_fixtures")
 
 
 def test_extracted_contract_fixture_is_valid() -> None:
     # Load the synthetic Agent B output fixture.
-    fixture_path = FIXTURES_DIR / "extracted_contract_net90.json"
+    fixture_path = FIXTURES_DIR / "scenario_03_extracted_contract.json"
 
     # Pydantic validates the full JSON structure here.
     extracted_contract = ExtractedContract.from_json_file(fixture_path)

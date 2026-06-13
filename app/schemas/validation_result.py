@@ -3,14 +3,14 @@ from pathlib import Path
 from typing import Annotated
 
 from pydantic import (
-    BaseModel,
-    ConfigDict,
     Field,
     StrictBool,
     StrictInt,
     StrictStr,
     field_validator,
 )
+
+from app.schemas.extracted_contract import BoundingBox, StrictSchemaModel
 
 # This file defines the official output contract for Agent D.
 # Agent D validates and normalizes extracted contract data before risk scoring.
@@ -23,15 +23,6 @@ NonNegativeInt = Annotated[StrictInt, Field(ge=0)]
 
 # Dates must be normalized to ISO format: YYYY-MM-DD.
 IsoDateString = Annotated[StrictStr, Field(pattern=r"^\d{4}-\d{2}-\d{2}$")]
-
-
-class StrictSchemaModel(BaseModel):
-    # Reject unknown fields so the pipeline stays deterministic.
-    model_config = ConfigDict(
-        extra="forbid",
-        frozen=True,
-        str_strip_whitespace=True,
-    )
 
 
 class ValidationStatus(str, Enum):
@@ -77,8 +68,7 @@ class NormalizedFields(StrictSchemaModel):
 
 
 class ValidationFinding(StrictSchemaModel):
-    # Represents one validation finding.
-    # Findings explain what was detected, how severe it is, and where the evidence is.
+    # Represents one validation finding structured for Evidence-First Auditability.
 
     finding_id: StrictStr = Field(..., min_length=1)
     field: StrictStr = Field(..., min_length=1)
@@ -86,9 +76,15 @@ class ValidationFinding(StrictSchemaModel):
     message: StrictStr = Field(..., min_length=1)
     evidence_ref: StrictStr = Field(..., min_length=1)
 
-    # Optional reference back to the clause that caused the finding.
+    # References back to the contract structure for lineage tracking
     clause_id: StrictStr | None = None
     page_number: PositivePageNumber | None = None
+    bbox: BoundingBox | None = None
+
+    policy_rule: StrictStr | None = Field(default=None, min_length=1)
+    expected_value: StrictStr | None = Field(default=None, min_length=1)
+    actual_value: StrictStr | None = Field(default=None, min_length=1)
+    recommendation: StrictStr | None = Field(default=None, min_length=1)
 
     @field_validator("finding_id", "field", "message", "evidence_ref")
     @classmethod
@@ -96,6 +92,14 @@ class ValidationFinding(StrictSchemaModel):
         # Prevent empty validation messages or missing evidence references.
         if not value.strip():
             raise ValueError("Value cannot be blank.")
+        return value
+
+    @field_validator("policy_rule", "expected_value", "actual_value", "recommendation")
+    @classmethod
+    def must_not_be_blank_if_provided(cls, value: str | None) -> str | None:
+        # Për fushat opsionale, sigurohemi që nëse dërgohen, të mos jenë vetëm zbrazëtirë "   "
+        if value is not None and not value.strip():
+            raise ValueError("Value cannot be blank if provided.")
         return value
 
 

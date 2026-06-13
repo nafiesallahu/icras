@@ -42,11 +42,11 @@ gdpr:
   approver: "compliance"
 
 required_clauses:
-  - "liability"
+  - "liability_cap"
   - "termination"
   - "confidentiality"
   - "governing_law"
-  - "data_processing"
+  - "gdpr_data_processing"
 
 risk_weights:
   payment_terms_exceeded: 25
@@ -56,3 +56,4 @@ risk_weights:
   missing_gdpr_clause: 25
   auto_renewal_without_opt_out: 15
   unknown_vendor: 20
+  jurisdiction_conflict: 40  

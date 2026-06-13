@@ -38,8 +38,9 @@ department_routing:
   legal:
     triggers:
       - "missing_liability_cap"
-      - "missing_governing_law"
+      - "missing_required_clause"
       - "auto_renewal_without_opt_out"
+      - "jurisdiction_conflict"
 
   compliance:
     triggers:

@@ -1,0 +1,45 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_003",
+    "source_file": "contract.pdf",
+    "extraction_mode": "synthetic_fallback",
+    "overall_confidence_score": 0.6,
+    "clauses": [
+        {
+            "clause_id": "payment_terms_001",
+            "clause_type": "payment_terms",
+            "text": "Payment shall be made within ninety (90) days of invoice receipt.",
+            "page_number": 3,
+            "confidence_score": 0.6,
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_001",
+            "structured_fields": {
+                "payment_terms_days": 90
+            },
+            "bbox": null
+        },
+        {
+            "clause_id": "governing_law_001",
+            "clause_type": "governing_law",
+            "text": "This Agreement shall be governed by the laws of Germany.",
+            "page_number": 6,
+            "confidence_score": 0.6,
+            "evidence_ref": "contract.pdf#page=6&clause=governing_law_001",
+            "structured_fields": {
+                "governing_law": "Germany"
+            },
+            "bbox": null
+        },
+        {
+            "clause_id": "liability_cap_001",
+            "clause_type": "liability_cap",
+            "text": "Each party's total liability shall not exceed the total fees paid under this Agreement.",
+            "page_number": 5,
+            "confidence_score": 0.6,
+            "evidence_ref": "contract.pdf#page=5&clause=liability_cap_001",
+            "structured_fields": {
+                "liability_cap_present": true
+            },
+            "bbox": null
+        }
+    ]
+}

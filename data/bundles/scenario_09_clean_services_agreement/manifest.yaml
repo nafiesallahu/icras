@@ -1,0 +1,9 @@
+bundle_id: scenario_09_clean_services_agreement
+contract_id: contract_009
+contract_type: services_agreement
+input_file: contract.pdf
+expected_behavior: clean_auto_approve
+jurisdiction: Germany
+counterparty_name: Hooli Services GmbH
+created_by: test_team
+contains_personal_data: false

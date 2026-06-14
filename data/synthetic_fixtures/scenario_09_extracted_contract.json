@@ -1,0 +1,77 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_009",
+    "source_file": "acme_rogue_systems_agreement.pdf",
+    "extraction_mode": "pdf_parser",
+    "overall_confidence_score": 0.9,
+    "clauses": [
+        {
+            "clause_id": "counterparty_009",
+            "clause_type": "counterparty",
+            "text": "This Agreement is entered into with Acme Rogue Systems LLC.",
+            "page_number": 1,
+            "confidence_score": 0.95,
+            "evidence_ref": "contract.pdf#page=1&clause=counterparty_009",
+            "structured_fields": {
+                "counterparty_name": "Acme Rogue Systems LLC"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 120.0,
+                "x1": 490.0,
+                "bottom": 152.0
+            }
+        },
+        {
+            "clause_id": "payment_terms_009",
+            "clause_type": "payment_terms",
+            "text": "Payment is due Net 30 from invoice receipt.",
+            "page_number": 3,
+            "confidence_score": 0.9,
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_009",
+            "structured_fields": {
+                "payment_terms_days": 30
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 210.0,
+                "x1": 450.0,
+                "bottom": 244.0
+            }
+        },
+        {
+            "clause_id": "liability_cap_009",
+            "clause_type": "liability_cap",
+            "text": "Total liability shall not exceed the fees paid under this Agreement.",
+            "page_number": 5,
+            "confidence_score": 0.89,
+            "evidence_ref": "contract.pdf#page=5&clause=liability_cap_009",
+            "structured_fields": {
+                "liability_cap_present": true
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 300.0,
+                "x1": 512.0,
+                "bottom": 342.0
+            }
+        },
+        {
+            "clause_id": "governing_law_009",
+            "clause_type": "governing_law",
+            "text": "This Agreement shall be governed by the laws of Germany.",
+            "page_number": 6,
+            "confidence_score": 0.9,
+            "evidence_ref": "contract.pdf#page=6&clause=governing_law_009",
+            "structured_fields": {
+                "governing_law": "Germany"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 400.0,
+                "x1": 489.0,
+                "bottom": 430.0
+            }
+        }
+    ]
+}

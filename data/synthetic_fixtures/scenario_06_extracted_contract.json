@@ -1,0 +1,78 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_006",
+    "source_file": "wayne_enterprises_agreement.pdf",
+    "extraction_mode": "pdf_parser",
+    "overall_confidence_score": 0.84,
+    "clauses": [
+        {
+            "clause_id": "counterparty_006",
+            "clause_type": "counterparty",
+            "text": "This Agreement is entered into with Wayne Enterprises GmbH.",
+            "page_number": 1,
+            "confidence_score": 0.9,
+            "evidence_ref": "contract.pdf#page=1&clause=counterparty_006",
+            "structured_fields": {
+                "counterparty_name": "Wayne Enterprises GmbH"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 118.0,
+                "x1": 478.0,
+                "bottom": 150.0
+            }
+        },
+        {
+            "clause_id": "governing_law_006_a",
+            "clause_type": "governing_law",
+            "text": "The Courts of Frankfurt, Germany shall have exclusive jurisdiction over any dispute arising under this Agreement.",
+            "page_number": 6,
+            "confidence_score": 0.83,
+            "evidence_ref": "contract.pdf#page=6&clause=governing_law_006_a",
+            "structured_fields": {
+                "governing_law": "Germany",
+                "forum": "Frankfurt, Germany"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 300.0,
+                "x1": 525.0,
+                "bottom": 346.0
+            }
+        },
+        {
+            "clause_id": "governing_law_006_b",
+            "clause_type": "governing_law",
+            "text": "Notwithstanding the foregoing, New York Law applies to the interpretation and enforcement of this Agreement.",
+            "page_number": 7,
+            "confidence_score": 0.82,
+            "evidence_ref": "contract.pdf#page=7&clause=governing_law_006_b",
+            "structured_fields": {
+                "governing_law": "New York"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 110.0,
+                "x1": 520.0,
+                "bottom": 156.0
+            }
+        },
+        {
+            "clause_id": "payment_terms_006",
+            "clause_type": "payment_terms",
+            "text": "Payment is due Net 30 from invoice date.",
+            "page_number": 3,
+            "confidence_score": 0.85,
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_006",
+            "structured_fields": {
+                "payment_terms_days": 30
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 210.0,
+                "x1": 450.0,
+                "bottom": 244.0
+            }
+        }
+    ]
+}

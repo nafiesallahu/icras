@@ -1,0 +1,92 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_002",
+    "source_file": "initech_supply_agreement.pdf",
+    "extraction_mode": "pdf_parser",
+    "overall_confidence_score": 0.9,
+    "clauses": [
+        {
+            "clause_id": "counterparty_002",
+            "clause_type": "counterparty",
+            "text": "This Supply Agreement is made with Initech Components Ltd.",
+            "page_number": 1,
+            "confidence_score": 0.93,
+            "evidence_ref": "contract.pdf#page=1&clause=counterparty_002",
+            "structured_fields": {
+                "counterparty_name": "Initech Components Ltd"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 118.0,
+                "x1": 470.5,
+                "bottom": 150.2
+            }
+        },
+        {
+            "clause_id": "payment_terms_002",
+            "clause_type": "payment_terms",
+            "text": "Invoices are payable Net 45 from receipt of goods.",
+            "page_number": 3,
+            "confidence_score": 0.91,
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_002",
+            "structured_fields": {
+                "payment_terms_days": 45
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 205.0,
+                "x1": 460.1,
+                "bottom": 240.3
+            }
+        },
+        {
+            "clause_id": "governing_law_002",
+            "clause_type": "governing_law",
+            "text": "This Agreement shall be governed by the laws of Germany.",
+            "page_number": 6,
+            "confidence_score": 0.92,
+            "evidence_ref": "contract.pdf#page=6&clause=governing_law_002",
+            "structured_fields": {
+                "governing_law": "Germany"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 400.0,
+                "x1": 489.3,
+                "bottom": 430.4
+            }
+        },
+        {
+            "clause_id": "gdpr_data_processing_002",
+            "clause_type": "gdpr_data_processing",
+            "text": "Each party shall comply with applicable data protection law, including the GDPR, when processing personal data under this Agreement.",
+            "page_number": 7,
+            "confidence_score": 0.89,
+            "evidence_ref": "contract.pdf#page=7&clause=gdpr_data_processing_002",
+            "structured_fields": {
+                "gdpr_clause_present": true
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 110.0,
+                "x1": 522.0,
+                "bottom": 175.6
+            }
+        },
+        {
+            "clause_id": "termination_002",
+            "clause_type": "termination",
+            "text": "Either party may terminate this Agreement for material breach upon thirty (30) days written notice.",
+            "page_number": 8,
+            "confidence_score": 0.9,
+            "evidence_ref": "contract.pdf#page=8&clause=termination_002",
+            "structured_fields": {},
+            "bbox": {
+                "x0": 72.0,
+                "top": 220.0,
+                "x1": 510.7,
+                "bottom": 262.9
+            }
+        }
+    ]
+}

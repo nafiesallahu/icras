@@ -1,0 +1,22 @@
+annotated-types==0.7.0
+iniconfig==2.3.0
+packaging==26.2
+pluggy==1.6.0
+pydantic==2.13.4
+pydantic_core==2.46.4
+Pygments==2.20.0
+pytest==9.1.0
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+
+# Please install the requirements by running the following command:
+# ```bash
+# pip install -r requirements.txt
+# ```
+
+# please run the following command to run the tests:
+# ```bash
+# pytest tests/test_schema_fixtures.py -v 
+# or
+# python -m pytest tests/test_schema_fixtures.py -v
+# ```

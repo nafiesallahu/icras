@@ -1,0 +1,77 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_004",
+    "source_file": "vostok_energy_services_agreement.pdf",
+    "extraction_mode": "pdf_parser",
+    "overall_confidence_score": 0.88,
+    "clauses": [
+        {
+            "clause_id": "counterparty_004",
+            "clause_type": "counterparty",
+            "text": "This Agreement is entered into with Vostok Energy Services OJSC.",
+            "page_number": 1,
+            "confidence_score": 0.9,
+            "evidence_ref": "contract.pdf#page=1&clause=counterparty_004",
+            "structured_fields": {
+                "counterparty_name": "Vostok Energy Services OJSC"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 116.0,
+                "x1": 480.0,
+                "bottom": 148.5
+            }
+        },
+        {
+            "clause_id": "payment_terms_004",
+            "clause_type": "payment_terms",
+            "text": "Payment terms are Net 30 from the date of invoice.",
+            "page_number": 3,
+            "confidence_score": 0.89,
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_004",
+            "structured_fields": {
+                "payment_terms_days": 30
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 210.0,
+                "x1": 455.0,
+                "bottom": 244.0
+            }
+        },
+        {
+            "clause_id": "governing_law_004",
+            "clause_type": "governing_law",
+            "text": "This Agreement shall be governed by, and the legal seat of performance shall be located in, The Russian Federation.",
+            "page_number": 6,
+            "confidence_score": 0.87,
+            "evidence_ref": "contract.pdf#page=6&clause=governing_law_004",
+            "structured_fields": {
+                "governing_law": "The Russian Federation"
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 400.0,
+                "x1": 525.0,
+                "bottom": 446.2
+            }
+        },
+        {
+            "clause_id": "liability_cap_004",
+            "clause_type": "liability_cap",
+            "text": "Total liability shall not exceed the fees paid in the prior twelve (12) months.",
+            "page_number": 5,
+            "confidence_score": 0.86,
+            "evidence_ref": "contract.pdf#page=5&clause=liability_cap_004",
+            "structured_fields": {
+                "liability_cap_present": true
+            },
+            "bbox": {
+                "x0": 72.0,
+                "top": 300.0,
+                "x1": 512.0,
+                "bottom": 342.0
+            }
+        }
+    ]
+}

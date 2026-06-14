@@ -1,0 +1,57 @@
+{
+    "schema_version": "1.0",
+    "contract_id": "contract_010",
+    "source_file": "oscorp_offshore_master_agreement.pdf",
+    "extraction_mode": "synthetic_fallback",
+    "overall_confidence_score": 0.45,
+    "clauses": [
+        {
+            "clause_id": "counterparty_010",
+            "clause_type": "counterparty",
+            "text": "This Master Agreement is entered into with Oscorp Offshore LLC.",
+            "page_number": 1,
+            "confidence_score": 0.5,
+            "evidence_ref": "contract.pdf#page=1&clause=counterparty_010",
+            "structured_fields": {
+                "counterparty_name": "Oscorp Offshore LLC"
+            },
+            "bbox": null
+        },
+        {
+            "clause_id": "payment_terms_010",
+            "clause_type": "payment_terms",
+            "text": "Payment shall be made within 120 days of invoice receipt.",
+            "page_number": 3,
+            "confidence_score": 0.44,
+            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_010",
+            "structured_fields": {
+                "payment_terms_days": 120
+            },
+            "bbox": null
+        },
+        {
+            "clause_id": "governing_law_010",
+            "clause_type": "governing_law",
+            "text": "This Agreement shall be governed by the laws of, and the legal seat of performance shall be in, The Islamic Republic of Iran.",
+            "page_number": 6,
+            "confidence_score": 0.43,
+            "evidence_ref": "contract.pdf#page=6&clause=governing_law_010",
+            "structured_fields": {
+                "governing_law": "The Islamic Republic of Iran"
+            },
+            "bbox": null
+        },
+        {
+            "clause_id": "auto_renewal_010",
+            "clause_type": "auto_renewal",
+            "text": "This Agreement shall automatically renew for successive annual terms.",
+            "page_number": 7,
+            "confidence_score": 0.42,
+            "evidence_ref": "contract.pdf#page=7&clause=auto_renewal_010",
+            "structured_fields": {
+                "auto_renewal_present": true
+            },
+            "bbox": null
+        }
+    ]
+}

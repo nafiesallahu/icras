@@ -9,6 +9,7 @@ PyYAML==6.0.3
 pytest==9.1.0
 typing-inspection==0.4.2
 typing_extensions==4.15.0
+PyYAML==6.0.3
 
 # Born-digital PDF parsing for Agent B and the contract-bundle PDF tests.
 pdfplumber==0.11.9

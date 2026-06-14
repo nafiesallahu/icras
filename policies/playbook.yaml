@@ -38,7 +38,7 @@ auto_renewal:
 
 gdpr:
   data_processing_clause_required_if:
-  contains_personal_data: true
+    contains_personal_data: true
   risk_if_missing: "high"
   approver: "compliance"
 

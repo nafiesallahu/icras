@@ -1,92 +1,143 @@
 {
-    "schema_version": "1.0",
-    "contract_id": "contract_008",
-    "source_file": "hooli_services_agreement.pdf",
-    "extraction_mode": "pdf_parser",
-    "overall_confidence_score": 0.9,
-    "clauses": [
-        {
-            "clause_id": "counterparty_008",
-            "clause_type": "counterparty",
-            "text": "This Services Agreement is entered into with Hooli Services GmbH.",
-            "page_number": 1,
-            "confidence_score": 0.92,
-            "evidence_ref": "contract.pdf#page=1&clause=counterparty_008",
-            "structured_fields": {
-                "counterparty_name": "Hooli Services GmbH"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 118.0,
-                "x1": 485.0,
-                "bottom": 150.0
-            }
-        },
-        {
-            "clause_id": "payment_terms_008",
-            "clause_type": "payment_terms",
-            "text": "Payment is due Net 30 from the date of invoice.",
-            "page_number": 3,
-            "confidence_score": 0.91,
-            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_008",
-            "structured_fields": {
-                "payment_terms_days": 30
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 210.0,
-                "x1": 450.0,
-                "bottom": 244.0
-            }
-        },
-        {
-            "clause_id": "liability_cap_008",
-            "clause_type": "liability_cap",
-            "text": "Aggregate liability shall not exceed the total fees paid under this Agreement.",
-            "page_number": 5,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=5&clause=liability_cap_008",
-            "structured_fields": {
-                "liability_cap_present": true
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 300.0,
-                "x1": 512.0,
-                "bottom": 342.0
-            }
-        },
-        {
-            "clause_id": "governing_law_008",
-            "clause_type": "governing_law",
-            "text": "This Agreement shall be governed by the laws of Germany.",
-            "page_number": 6,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=6&clause=governing_law_008",
-            "structured_fields": {
-                "governing_law": "Germany"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 400.0,
-                "x1": 489.0,
-                "bottom": 430.0
-            }
-        },
-        {
-            "clause_id": "termination_008",
-            "clause_type": "termination",
-            "text": "Either party may terminate for convenience upon sixty (60) days written notice.",
-            "page_number": 8,
-            "confidence_score": 0.89,
-            "evidence_ref": "contract.pdf#page=8&clause=termination_008",
-            "structured_fields": {},
-            "bbox": {
-                "x0": 72.0,
-                "top": 220.0,
-                "x1": 510.0,
-                "bottom": 262.0
-            }
-        }
-    ]
+  "schema_version": "1.0",
+  "contract_id": "contract_008",
+  "source_file": "hooli_services_agreement.pdf",
+  "extraction_mode": "pdf_parser",
+  "overall_confidence_score": 0.91,
+  "clauses": [
+    {
+      "clause_id": "counterparty_008",
+      "clause_type": "counterparty",
+      "text": "This Services Agreement is entered into with Hooli Services GmbH.",
+      "page_number": 1,
+      "confidence_score": 0.92,
+      "evidence_ref": "contract.pdf#page=1&clause=counterparty_008",
+      "structured_fields": {
+        "counterparty_name": "Hooli Services GmbH"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 118.0,
+        "x1": 485.0,
+        "bottom": 150.0
+      }
+    },
+    {
+      "clause_id": "effective_date_008",
+      "clause_type": "effective_date",
+      "text": "This Agreement shall take effect as of 01 June 2025.",
+      "page_number": 1,
+      "confidence_score": 0.91,
+      "evidence_ref": "contract.pdf#page=1&clause=effective_date_008",
+      "structured_fields": {
+        "effective_date": "2025-06-01"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 160.0,
+        "x1": 410.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "clause_id": "data_scope_008",
+      "clause_type": "other",
+      "text": "Under this Agreement the Provider processes personal data of the Customer's employees and end users, including names, contact details and usage records, in order to deliver the services.",
+      "page_number": 2,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=2&clause=data_scope_008",
+      "structured_fields": {
+        "contains_personal_data": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 200.0,
+        "x1": 525.0,
+        "bottom": 260.0
+      }
+    },
+    {
+      "clause_id": "payment_terms_008",
+      "clause_type": "payment_terms",
+      "text": "Payment is due Net 30 from the date of invoice.",
+      "page_number": 3,
+      "confidence_score": 0.91,
+      "evidence_ref": "contract.pdf#page=3&clause=payment_terms_008",
+      "structured_fields": {
+        "payment_terms_days": 30
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 280.0,
+        "x1": 450.0,
+        "bottom": 314.0
+      }
+    },
+    {
+      "clause_id": "confidentiality_008",
+      "clause_type": "confidentiality",
+      "text": "Each party shall keep the other party's Confidential Information in strict confidence.",
+      "page_number": 4,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=4&clause=confidentiality_008",
+      "structured_fields": {
+        "confidentiality_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 330.0,
+        "x1": 520.0,
+        "bottom": 370.0
+      }
+    },
+    {
+      "clause_id": "liability_cap_008",
+      "clause_type": "liability_cap",
+      "text": "Aggregate liability shall not exceed the total fees paid under this Agreement.",
+      "page_number": 5,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=5&clause=liability_cap_008",
+      "structured_fields": {
+        "liability_cap_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 380.0,
+        "x1": 512.0,
+        "bottom": 422.0
+      }
+    },
+    {
+      "clause_id": "governing_law_008",
+      "clause_type": "governing_law",
+      "text": "This Agreement shall be governed by the laws of Germany.",
+      "page_number": 6,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=6&clause=governing_law_008",
+      "structured_fields": {
+        "governing_law": "Germany"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 430.0,
+        "x1": 489.0,
+        "bottom": 460.0
+      }
+    },
+    {
+      "clause_id": "termination_008",
+      "clause_type": "termination",
+      "text": "Either party may terminate for convenience upon sixty (60) days written notice.",
+      "page_number": 8,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=8&clause=termination_008",
+      "structured_fields": {},
+      "bbox": {
+        "x0": 72.0,
+        "top": 220.0,
+        "x1": 510.0,
+        "bottom": 262.0
+      }
+    }
+  ]
 }

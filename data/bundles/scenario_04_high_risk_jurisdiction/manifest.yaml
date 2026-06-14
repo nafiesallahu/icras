@@ -1,0 +1,9 @@
+bundle_id: scenario_04_high_risk_jurisdiction
+contract_id: contract_004
+contract_type: services_agreement
+input_file: contract.pdf
+expected_behavior: high_risk_jurisdiction
+jurisdiction: Russia
+counterparty_name: Globex Industries GmbH
+created_by: test_team
+contains_personal_data: false

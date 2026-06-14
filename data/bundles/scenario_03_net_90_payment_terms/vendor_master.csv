@@ -1,0 +1,8 @@
+vendor_id,vendor_name,country,status,risk_level
+V001,Globex Industries GmbH,Germany,approved,low
+V002,Initech Components Ltd,Germany,approved,low
+V003,Acme Services GmbH,Germany,approved,low
+V004,Umbrella SaaS Inc,United States,approved,medium
+V005,Wayne Enterprises GmbH,Germany,approved,low
+V006,Stark Innovations GmbH,Germany,approved,low
+V007,Hooli Services GmbH,Germany,approved,low

@@ -1,0 +1,9 @@
+bundle_id: scenario_10_multiple_high_risks
+contract_id: contract_010
+contract_type: services_agreement
+input_file: contract.pdf
+expected_behavior: multiple_high_risks
+jurisdiction: Iran
+counterparty_name: Oscorp Offshore LLC
+created_by: test_team
+contains_personal_data: true

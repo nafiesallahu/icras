@@ -1,0 +1,9 @@
+bundle_id: scenario_01_clean_nda
+contract_id: contract_001
+contract_type: nda
+input_file: contract.pdf
+expected_behavior: clean_auto_approve
+jurisdiction: Germany
+counterparty_name: Globex Industries GmbH
+created_by: test_team
+contains_personal_data: false

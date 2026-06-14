@@ -1,0 +1,59 @@
+version: "1.0"
+owner: "ICRAS Team"
+description: "Jurisdiction risk profiles used for contract risk scoring."
+
+jurisdictions:
+  Germany:
+    risk_level: "low"
+    risk_score: 10
+    compliance_review_required: false
+
+  France:
+    risk_level: "low"
+    risk_score: 10
+    compliance_review_required: false
+
+  Netherlands:
+    risk_level: "low"
+    risk_score: 10
+    compliance_review_required: false
+
+  United Kingdom:
+    risk_level: "low"
+    risk_score: 15
+    compliance_review_required: false
+
+  United States:
+    risk_level: "medium"
+    risk_score: 40
+    compliance_review_required: false
+
+  Canada:
+    risk_level: "medium"
+    risk_score: 35
+    compliance_review_required: false
+
+  Australia:
+    risk_level: "medium"
+    risk_score: 35
+    compliance_review_required: false
+
+  Russia:
+    risk_level: "high"
+    risk_score: 75
+    compliance_review_required: true
+
+  Iran:
+    risk_level: "high"
+    risk_score: 80
+    compliance_review_required: true
+
+  North Korea:
+    risk_level: "critical"
+    risk_score: 95
+    compliance_review_required: true
+
+default_jurisdiction:
+  risk_level: "medium"
+  risk_score: 40
+  compliance_review_required: true

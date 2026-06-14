@@ -1,0 +1,9 @@
+bundle_id: scenario_02_missing_liability_cap
+contract_id: contract_002
+contract_type: services_agreement
+input_file: contract.pdf
+expected_behavior: missing_liability_cap
+jurisdiction: Germany
+counterparty_name: Initech Components Ltd
+created_by: test_team
+contains_personal_data: false

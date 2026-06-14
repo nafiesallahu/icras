@@ -1,77 +1,158 @@
 {
-    "schema_version": "1.0",
-    "contract_id": "contract_009",
-    "source_file": "acme_rogue_systems_agreement.pdf",
-    "extraction_mode": "pdf_parser",
-    "overall_confidence_score": 0.9,
-    "clauses": [
-        {
-            "clause_id": "counterparty_009",
-            "clause_type": "counterparty",
-            "text": "This Agreement is entered into with Acme Rogue Systems LLC.",
-            "page_number": 1,
-            "confidence_score": 0.95,
-            "evidence_ref": "contract.pdf#page=1&clause=counterparty_009",
-            "structured_fields": {
-                "counterparty_name": "Acme Rogue Systems LLC"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 120.0,
-                "x1": 490.0,
-                "bottom": 152.0
-            }
-        },
-        {
-            "clause_id": "payment_terms_009",
-            "clause_type": "payment_terms",
-            "text": "Payment is due Net 30 from invoice receipt.",
-            "page_number": 3,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_009",
-            "structured_fields": {
-                "payment_terms_days": 30
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 210.0,
-                "x1": 450.0,
-                "bottom": 244.0
-            }
-        },
-        {
-            "clause_id": "liability_cap_009",
-            "clause_type": "liability_cap",
-            "text": "Total liability shall not exceed the fees paid under this Agreement.",
-            "page_number": 5,
-            "confidence_score": 0.89,
-            "evidence_ref": "contract.pdf#page=5&clause=liability_cap_009",
-            "structured_fields": {
-                "liability_cap_present": true
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 300.0,
-                "x1": 512.0,
-                "bottom": 342.0
-            }
-        },
-        {
-            "clause_id": "governing_law_009",
-            "clause_type": "governing_law",
-            "text": "This Agreement shall be governed by the laws of Germany.",
-            "page_number": 6,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=6&clause=governing_law_009",
-            "structured_fields": {
-                "governing_law": "Germany"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 400.0,
-                "x1": 489.0,
-                "bottom": 430.0
-            }
-        }
-    ]
+  "schema_version": "1.0",
+  "contract_id": "contract_009",
+  "source_file": "hooli_clean_services_agreement.pdf",
+  "extraction_mode": "pdf_parser",
+  "overall_confidence_score": 0.92,
+  "clauses": [
+    {
+      "clause_id": "counterparty_009",
+      "clause_type": "counterparty",
+      "text": "This Standard Services Agreement is entered into with Hooli Services GmbH, a company incorporated under the laws of Germany.",
+      "page_number": 1,
+      "confidence_score": 0.95,
+      "evidence_ref": "contract.pdf#page=1&clause=counterparty_009",
+      "structured_fields": {
+        "counterparty_name": "Hooli Services GmbH"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 120.0,
+        "x1": 490.0,
+        "bottom": 152.0
+      }
+    },
+    {
+      "clause_id": "effective_date_009",
+      "clause_type": "effective_date",
+      "text": "This Agreement shall take effect as of 01 July 2025.",
+      "page_number": 1,
+      "confidence_score": 0.92,
+      "evidence_ref": "contract.pdf#page=1&clause=effective_date_009",
+      "structured_fields": {
+        "effective_date": "2025-07-01"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 160.0,
+        "x1": 410.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "clause_id": "payment_terms_009",
+      "clause_type": "payment_terms",
+      "text": "Payment is due Net 30 from invoice receipt.",
+      "page_number": 3,
+      "confidence_score": 0.91,
+      "evidence_ref": "contract.pdf#page=3&clause=payment_terms_009",
+      "structured_fields": {
+        "payment_terms_days": 30
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 210.0,
+        "x1": 450.0,
+        "bottom": 244.0
+      }
+    },
+    {
+      "clause_id": "confidentiality_009",
+      "clause_type": "confidentiality",
+      "text": "Each party shall keep the other party's Confidential Information in strict confidence.",
+      "page_number": 4,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=4&clause=confidentiality_009",
+      "structured_fields": {
+        "confidentiality_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 260.0,
+        "x1": 520.0,
+        "bottom": 300.0
+      }
+    },
+    {
+      "clause_id": "liability_cap_009",
+      "clause_type": "liability_cap",
+      "text": "The aggregate liability of either party shall not exceed the total fees paid under this Agreement.",
+      "page_number": 5,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=5&clause=liability_cap_009",
+      "structured_fields": {
+        "liability_cap_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 300.0,
+        "x1": 512.0,
+        "bottom": 342.0
+      }
+    },
+    {
+      "clause_id": "termination_009",
+      "clause_type": "termination",
+      "text": "Either party may terminate for material breach upon thirty (30) days written notice.",
+      "page_number": 5,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=5&clause=termination_009",
+      "structured_fields": {},
+      "bbox": {
+        "x0": 72.0,
+        "top": 350.0,
+        "x1": 510.0,
+        "bottom": 392.0
+      }
+    },
+    {
+      "clause_id": "governing_law_009",
+      "clause_type": "governing_law",
+      "text": "This Agreement shall be governed by the laws of Germany.",
+      "page_number": 6,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=6&clause=governing_law_009",
+      "structured_fields": {
+        "governing_law": "Germany"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 400.0,
+        "x1": 489.0,
+        "bottom": 430.0
+      }
+    },
+    {
+      "clause_id": "gdpr_data_processing_009",
+      "clause_type": "gdpr_data_processing",
+      "text": "The parties shall process personal data in accordance with the GDPR and applicable data protection law.",
+      "page_number": 7,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=7&clause=gdpr_data_processing_009",
+      "structured_fields": {
+        "gdpr_clause_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 100.0,
+        "x1": 522.0,
+        "bottom": 175.0
+      }
+    },
+    {
+      "clause_id": "signature_block_009",
+      "clause_type": "signature_block",
+      "text": "IN WITNESS WHEREOF, the parties have executed this Standard Services Agreement as of the Effective Date.",
+      "page_number": 8,
+      "confidence_score": 0.93,
+      "evidence_ref": "contract.pdf#page=8&clause=signature_block_009",
+      "structured_fields": {},
+      "bbox": {
+        "x0": 72.0,
+        "top": 500.0,
+        "x1": 520.0,
+        "bottom": 540.0
+      }
+    }
+  ]
 }

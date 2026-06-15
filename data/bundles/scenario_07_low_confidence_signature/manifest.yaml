@@ -1,0 +1,9 @@
+bundle_id: scenario_07_low_confidence_signature
+contract_id: contract_007
+contract_type: nda
+input_file: contract.pdf
+expected_behavior: low_confidence_manual_review
+jurisdiction: Germany
+counterparty_name: Stark Innovations GmbH
+created_by: test_team
+contains_personal_data: false

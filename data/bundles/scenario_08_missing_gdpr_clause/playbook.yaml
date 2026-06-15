@@ -1,0 +1,62 @@
+version: "1.0"
+owner: "ICRAS Team"
+description: "Corporate risk rules and threshold configuration for contract review."
+
+risk_thresholds:
+  low:
+    min_score: 0
+    max_score: 39
+  medium:
+    min_score: 40
+    max_score: 69
+  high:
+    min_score: 70
+    max_score: 89
+  critical:
+    min_score: 90
+    max_score: 100
+
+payment_terms:
+  max_allowed_days: 30
+  medium_risk_days: 60
+  high_risk_days: 90
+  risk_if_exceeds: "high"
+  approver: "finance"
+
+liability_cap:
+  required: true
+  minimum_cap_type: "contract_value"
+  risk_if_missing: "high"
+  approver: "legal"
+
+auto_renewal:
+  allowed: true
+  opt_out_window_required: true
+  minimum_opt_out_days: 30
+  risk_if_missing: "medium"
+  approver: "legal"
+
+gdpr:
+  data_processing_clause_required_if:
+  contains_personal_data: true
+  risk_if_missing: "high"
+  approver: "compliance"
+
+required_clauses:
+  - "liability_cap"
+  - "termination"
+  - "confidentiality"
+  - "governing_law"
+  - "gdpr_data_processing"
+
+risk_scores:
+  payment_terms_exceed_policy: 85
+  missing_required_clause: 80
+  missing_liability_cap: 90
+  high_risk_jurisdiction: 95
+  missing_gdpr_clause: 90
+  auto_renewal_no_opt_out: 75
+  unknown_counterparty: 80
+  counterparty_mismatch: 85
+  conflicting_governing_law: 90
+  low_confidence_signature: 60

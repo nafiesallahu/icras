@@ -51,3 +51,12 @@ department_routing:
     triggers:
       - "unknown_vendor"
       - "medium_risk_contract"
+
+decision_priority:
+    reject_or_block: 100
+    compliance_review_required: 90
+    legal_review_required: 80
+    finance_review_required: 70
+    manual_review_required: 60
+    manager_review: 50
+    auto_approve: 10

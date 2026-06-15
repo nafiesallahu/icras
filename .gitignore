@@ -1,16 +1,39 @@
 # Python virtual environments
 venv/
 .venv/
+env/
+
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # IDEs dhe OS
 .vscode/
 .idea/
 .DS_Store
 
-# ICRAS Project runtime files (mos i bëni commit run-et lokale)
+# ICRAS Project runtime files
 runs/
 
-# OpenAI API key ose sekrete të tjera lokale
+# Local environment / secrets
 .env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Build / packaging
+dist/
+build/
+*.egg-info/
+
+# Temporary files
+*.tmp
+*.swp
+*.swo

@@ -1,0 +1,9 @@
+bundle_id: scenario_06_conflicting_governing_law
+contract_id: contract_006
+contract_type: services_agreement
+input_file: contract.pdf
+expected_behavior: jurisdiction_conflict
+jurisdiction: Germany
+counterparty_name: Wayne Enterprises GmbH
+created_by: test_team
+contains_personal_data: false

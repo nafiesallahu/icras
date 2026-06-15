@@ -1,0 +1,9 @@
+bundle_id: scenario_05_auto_renewal_no_opt_out
+contract_id: contract_005
+contract_type: subscription_agreement
+input_file: contract.pdf
+expected_behavior: auto_renewal_without_opt_out
+jurisdiction: Germany
+counterparty_name: Umbrella SaaS Inc
+created_by: test_team
+contains_personal_data: false

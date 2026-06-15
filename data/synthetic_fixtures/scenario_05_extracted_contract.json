@@ -1,77 +1,161 @@
 {
-    "schema_version": "1.0",
-    "contract_id": "contract_005",
-    "source_file": "umbrella_saas_subscription.pdf",
-    "extraction_mode": "pdf_parser",
-    "overall_confidence_score": 0.91,
-    "clauses": [
-        {
-            "clause_id": "counterparty_005",
-            "clause_type": "counterparty",
-            "text": "This Subscription Agreement is made with Umbrella SaaS Inc.",
-            "page_number": 1,
-            "confidence_score": 0.92,
-            "evidence_ref": "contract.pdf#page=1&clause=counterparty_005",
-            "structured_fields": {
-                "counterparty_name": "Umbrella SaaS Inc"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 120.0,
-                "x1": 470.0,
-                "bottom": 152.0
-            }
-        },
-        {
-            "clause_id": "payment_terms_005",
-            "clause_type": "payment_terms",
-            "text": "Subscription fees are invoiced annually and due Net 30.",
-            "page_number": 3,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=3&clause=payment_terms_005",
-            "structured_fields": {
-                "payment_terms_days": 30
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 210.0,
-                "x1": 460.0,
-                "bottom": 246.0
-            }
-        },
-        {
-            "clause_id": "auto_renewal_005",
-            "clause_type": "auto_renewal",
-            "text": "This Agreement shall automatically renew for successive twelve (12) month terms at the end of each then-current term.",
-            "page_number": 4,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=4&clause=auto_renewal_005",
-            "structured_fields": {
-                "auto_renewal_present": true
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 300.0,
-                "x1": 522.0,
-                "bottom": 348.0
-            }
-        },
-        {
-            "clause_id": "governing_law_005",
-            "clause_type": "governing_law",
-            "text": "This Agreement shall be governed by the laws of Germany.",
-            "page_number": 6,
-            "confidence_score": 0.9,
-            "evidence_ref": "contract.pdf#page=6&clause=governing_law_005",
-            "structured_fields": {
-                "governing_law": "Germany"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 410.0,
-                "x1": 489.0,
-                "bottom": 440.0
-            }
-        }
-    ]
+  "schema_version": "1.0",
+  "contract_id": "contract_005",
+  "source_file": "umbrella_saas_subscription.pdf",
+  "extraction_mode": "pdf_parser",
+  "overall_confidence_score": 0.91,
+  "clauses": [
+    {
+      "clause_id": "counterparty_005",
+      "clause_type": "counterparty",
+      "text": "This Subscription Agreement is made with Umbrella SaaS Inc.",
+      "page_number": 1,
+      "confidence_score": 0.92,
+      "evidence_ref": "contract.pdf#page=1&clause=counterparty_005",
+      "structured_fields": {
+        "counterparty_name": "Umbrella SaaS Inc"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 120.0,
+        "x1": 470.0,
+        "bottom": 152.0
+      }
+    },
+    {
+      "clause_id": "effective_date_005",
+      "clause_type": "effective_date",
+      "text": "This Agreement shall take effect as of 01 February 2025.",
+      "page_number": 1,
+      "confidence_score": 0.91,
+      "evidence_ref": "contract.pdf#page=1&clause=effective_date_005",
+      "structured_fields": {
+        "effective_date": "2025-02-01"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 160.0,
+        "x1": 410.0,
+        "bottom": 192.0
+      }
+    },
+    {
+      "clause_id": "payment_terms_005",
+      "clause_type": "payment_terms",
+      "text": "Subscription fees are invoiced annually and due Net 30.",
+      "page_number": 3,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=3&clause=payment_terms_005",
+      "structured_fields": {
+        "payment_terms_days": 30
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 210.0,
+        "x1": 460.0,
+        "bottom": 246.0
+      }
+    },
+    {
+      "clause_id": "confidentiality_005",
+      "clause_type": "confidentiality",
+      "text": "Each party shall protect the other party's Confidential Information from unauthorised disclosure.",
+      "page_number": 3,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=3&clause=confidentiality_005",
+      "structured_fields": {
+        "confidentiality_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 255.0,
+        "x1": 520.0,
+        "bottom": 295.0
+      }
+    },
+    {
+      "clause_id": "auto_renewal_005",
+      "clause_type": "auto_renewal",
+      "text": "This Agreement shall automatically renew for successive twelve (12) month terms at the end of each then-current term.",
+      "page_number": 4,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=4&clause=auto_renewal_005",
+      "structured_fields": {
+        "auto_renewal_present": true,
+        "opt_out_window_days": null
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 300.0,
+        "x1": 522.0,
+        "bottom": 348.0
+      }
+    },
+    {
+      "clause_id": "liability_cap_005",
+      "clause_type": "liability_cap",
+      "text": "Aggregate liability shall not exceed the total fees paid in the preceding twelve (12) months.",
+      "page_number": 5,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=5&clause=liability_cap_005",
+      "structured_fields": {
+        "liability_cap_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 360.0,
+        "x1": 512.0,
+        "bottom": 402.0
+      }
+    },
+    {
+      "clause_id": "termination_005",
+      "clause_type": "termination",
+      "text": "Either party may terminate for material breach upon thirty (30) days written notice.",
+      "page_number": 5,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=5&clause=termination_005",
+      "structured_fields": {},
+      "bbox": {
+        "x0": 72.0,
+        "top": 410.0,
+        "x1": 510.0,
+        "bottom": 452.0
+      }
+    },
+    {
+      "clause_id": "governing_law_005",
+      "clause_type": "governing_law",
+      "text": "This Agreement shall be governed by the laws of Germany.",
+      "page_number": 6,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=6&clause=governing_law_005",
+      "structured_fields": {
+        "governing_law": "Germany"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 460.0,
+        "x1": 489.0,
+        "bottom": 490.0
+      }
+    },
+    {
+      "clause_id": "gdpr_data_processing_005",
+      "clause_type": "gdpr_data_processing",
+      "text": "The parties shall process personal data in accordance with the GDPR and applicable data protection law.",
+      "page_number": 7,
+      "confidence_score": 0.9,
+      "evidence_ref": "contract.pdf#page=7&clause=gdpr_data_processing_005",
+      "structured_fields": {
+        "gdpr_clause_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 100.0,
+        "x1": 522.0,
+        "bottom": 175.0
+      }
+    }
+  ]
 }

@@ -1,114 +1,144 @@
 {
-    "schema_version": "1.0",
-    "contract_id": "contract_001",
-    "source_file": "acme_master_services_agreement.pdf",
-    "extraction_mode": "pdf_parser",
-    "overall_confidence_score": 0.97,
-    "clauses": [
-        {
-            "clause_id": "counterparty_001",
-            "clause_type": "counterparty",
-            "text": "This Master Services Agreement is entered into with Globex Industries GmbH, a company incorporated under the laws of Germany.",
-            "page_number": 1,
-            "confidence_score": 0.98,
-            "evidence_ref": "contract.pdf#page=1&clause=counterparty_001",
-            "structured_fields": {
-                "counterparty_name": "Globex Industries GmbH"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 120.5,
-                "x1": 523.4,
-                "bottom": 158.9
-            }
-        },
-        {
-            "clause_id": "effective_date_001",
-            "clause_type": "effective_date",
-            "text": "This Agreement shall take effect as of 01 January 2025.",
-            "page_number": 1,
-            "confidence_score": 0.96,
-            "evidence_ref": "contract.pdf#page=1&clause=effective_date_001",
-            "structured_fields": {
-                "effective_date": "2025-01-01"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 168.0,
-                "x1": 410.2,
-                "bottom": 196.3
-            }
-        },
-        {
-            "clause_id": "payment_terms_001",
-            "clause_type": "payment_terms",
-            "text": "Payment shall be due Net 30 from the date of a valid invoice.",
-            "page_number": 4,
-            "confidence_score": 0.97,
-            "evidence_ref": "contract.pdf#page=4&clause=payment_terms_001",
-            "structured_fields": {
-                "payment_terms_days": 30
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 210.0,
-                "x1": 498.7,
-                "bottom": 248.1
-            }
-        },
-        {
-            "clause_id": "liability_cap_001",
-            "clause_type": "liability_cap",
-            "text": "The aggregate liability of either party shall not exceed the total Contract Value of EUR 500,000 paid under this Agreement.",
-            "page_number": 5,
-            "confidence_score": 0.95,
-            "evidence_ref": "contract.pdf#page=5&clause=liability_cap_001",
-            "structured_fields": {
-                "liability_cap_present": true,
-                "liability_cap_amount": 500000,
-                "contract_value": 500000,
-                "currency": "EUR"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 300.4,
-                "x1": 521.9,
-                "bottom": 352.6
-            }
-        },
-        {
-            "clause_id": "governing_law_001",
-            "clause_type": "governing_law",
-            "text": "This Agreement shall be governed by and construed in accordance with the laws of Germany.",
-            "page_number": 6,
-            "confidence_score": 0.98,
-            "evidence_ref": "contract.pdf#page=6&clause=governing_law_001",
-            "structured_fields": {
-                "governing_law": "Germany"
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 410.0,
-                "x1": 489.3,
-                "bottom": 438.7
-            }
-        },
-        {
-            "clause_id": "gdpr_data_processing_001",
-            "clause_type": "gdpr_data_processing",
-            "text": "The parties shall process personal data in accordance with Regulation (EU) 2016/679 (GDPR). The Processor shall act only on documented instructions from the Controller, ensure appropriate technical and organisational measures under Article 32, support data subject rights, notify personal data breaches without undue delay, and delete or return all personal data upon termination.",
-            "page_number": 7,
-            "confidence_score": 0.94,
-            "evidence_ref": "contract.pdf#page=7&clause=gdpr_data_processing_001",
-            "structured_fields": {
-                "gdpr_clause_present": true
-            },
-            "bbox": {
-                "x0": 72.0,
-                "top": 100.0,
-                "x1": 525.0,
-                "bottom": 240.8
-            }
-        }
-    ]
+  "schema_version": "1.0",
+  "contract_id": "contract_001",
+  "source_file": "globex_mutual_nda.pdf",
+  "extraction_mode": "pdf_parser",
+  "overall_confidence_score": 0.97,
+  "clauses": [
+    {
+      "clause_id": "counterparty_001",
+      "clause_type": "counterparty",
+      "text": "This Mutual Non-Disclosure Agreement is entered into with Globex Industries GmbH, a company incorporated under the laws of Germany.",
+      "page_number": 1,
+      "confidence_score": 0.98,
+      "evidence_ref": "contract.pdf#page=1&clause=counterparty_001",
+      "structured_fields": {
+        "counterparty_name": "Globex Industries GmbH"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 120.5,
+        "x1": 523.4,
+        "bottom": 158.9
+      }
+    },
+    {
+      "clause_id": "effective_date_001",
+      "clause_type": "effective_date",
+      "text": "This Mutual Non-Disclosure Agreement shall take effect as of 01 January 2025.",
+      "page_number": 1,
+      "confidence_score": 0.96,
+      "evidence_ref": "contract.pdf#page=1&clause=effective_date_001",
+      "structured_fields": {
+        "effective_date": "2025-01-01"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 168.0,
+        "x1": 410.2,
+        "bottom": 196.3
+      }
+    },
+    {
+      "clause_id": "confidentiality_001",
+      "clause_type": "confidentiality",
+      "text": "Each party shall keep the other party's Confidential Information in strict confidence, use it solely to evaluate the contemplated business relationship, and disclose it only to representatives with a need to know who are bound by equivalent obligations.",
+      "page_number": 2,
+      "confidence_score": 0.97,
+      "evidence_ref": "contract.pdf#page=2&clause=confidentiality_001",
+      "structured_fields": {
+        "confidentiality_present": true,
+        "confidentiality_term_years": 3
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 210.0,
+        "x1": 520.0,
+        "bottom": 268.0
+      }
+    },
+    {
+      "clause_id": "liability_cap_001",
+      "clause_type": "liability_cap",
+      "text": "The aggregate liability of either party under this Agreement shall not exceed EUR 100,000.",
+      "page_number": 3,
+      "confidence_score": 0.95,
+      "evidence_ref": "contract.pdf#page=3&clause=liability_cap_001",
+      "structured_fields": {
+        "liability_cap_present": true,
+        "liability_cap_amount": 100000,
+        "currency": "EUR"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 280.0,
+        "x1": 521.9,
+        "bottom": 322.0
+      }
+    },
+    {
+      "clause_id": "termination_001",
+      "clause_type": "termination",
+      "text": "Either party may terminate this Agreement upon thirty (30) days written notice; the confidentiality obligations shall survive such termination.",
+      "page_number": 3,
+      "confidence_score": 0.96,
+      "evidence_ref": "contract.pdf#page=3&clause=termination_001",
+      "structured_fields": {},
+      "bbox": {
+        "x0": 72.0,
+        "top": 330.0,
+        "x1": 510.7,
+        "bottom": 380.0
+      }
+    },
+    {
+      "clause_id": "governing_law_001",
+      "clause_type": "governing_law",
+      "text": "This Agreement shall be governed by and construed in accordance with the laws of Germany.",
+      "page_number": 4,
+      "confidence_score": 0.98,
+      "evidence_ref": "contract.pdf#page=4&clause=governing_law_001",
+      "structured_fields": {
+        "governing_law": "Germany"
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 100.0,
+        "x1": 489.3,
+        "bottom": 138.0
+      }
+    },
+    {
+      "clause_id": "gdpr_data_processing_001",
+      "clause_type": "gdpr_data_processing",
+      "text": "To the extent any personal data is exchanged under this Agreement, the parties shall process it in accordance with Regulation (EU) 2016/679 (GDPR), applying appropriate technical and organisational measures and deleting or returning such data upon termination.",
+      "page_number": 4,
+      "confidence_score": 0.95,
+      "evidence_ref": "contract.pdf#page=4&clause=gdpr_data_processing_001",
+      "structured_fields": {
+        "gdpr_clause_present": true
+      },
+      "bbox": {
+        "x0": 72.0,
+        "top": 150.0,
+        "x1": 525.0,
+        "bottom": 230.0
+      }
+    },
+    {
+      "clause_id": "signature_block_001",
+      "clause_type": "signature_block",
+      "text": "IN WITNESS WHEREOF, the parties have executed this Mutual Non-Disclosure Agreement as of the Effective Date.",
+      "page_number": 5,
+      "confidence_score": 0.96,
+      "evidence_ref": "contract.pdf#page=5&clause=signature_block_001",
+      "structured_fields": {},
+      "bbox": {
+        "x0": 72.0,
+        "top": 500.0,
+        "x1": 520.0,
+        "bottom": 540.0
+      }
+    }
+  ]
 }

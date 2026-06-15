@@ -17,7 +17,7 @@ risk_thresholds:
     max_score: 100
 
 payment_terms:
-  max_payment_days: 30
+  max_allowed_days: 30
   medium_risk_days: 60
   high_risk_days: 90
   risk_if_exceeds: "high"
@@ -37,7 +37,8 @@ auto_renewal:
   approver: "legal"
 
 gdpr:
-  data_processing_clause_required: true
+  data_processing_clause_required_if:
+    contains_personal_data: true
   risk_if_missing: "high"
   approver: "compliance"
 
@@ -48,12 +49,14 @@ required_clauses:
   - "governing_law"
   - "gdpr_data_processing"
 
-risk_weights:
-  payment_terms_exceeded: 25
-  missing_required_clause: 30
-  missing_liability_cap: 30
-  high_risk_jurisdiction: 25
-  missing_gdpr_clause: 25
-  auto_renewal_without_opt_out: 15
-  unknown_vendor: 20
-  jurisdiction_conflict: 40  
+risk_scores:
+  payment_terms_exceed_policy: 85
+  missing_required_clause: 80
+  missing_liability_cap: 90
+  high_risk_jurisdiction: 95
+  missing_gdpr_clause: 90
+  auto_renewal_no_opt_out: 75
+  unknown_counterparty: 80
+  counterparty_mismatch: 85
+  conflicting_governing_law: 90
+  low_confidence_signature: 60

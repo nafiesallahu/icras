@@ -80,6 +80,33 @@ class BoundingBox(StrictSchemaModel):
     bottom: NonNegativeCoordinate
 
 
+class ClauseLocation(StrictSchemaModel):
+    # One physical location of a clause inside the source PDF.
+    #
+    # A single logical clause may appear on multiple pages (for example when its
+    # text wraps across a page boundary). Each page the clause spans produces one
+    # ClauseLocation so multi-page clauses are aggregated into a single clause
+    # object with multiple locations rather than duplicated.
+
+    page: PositivePageNumber
+
+    # bbox is the union bounding box of the clause's words on this page. It is
+    # optional because synthetic fallback (and any clause without word
+    # coordinates) cannot supply PDF coordinates.
+    bbox: BoundingBox | None = None
+
+    # A short, human-readable excerpt of the clause text on this page, used for
+    # audit/evidence traceability even when a bbox is unavailable.
+    text_excerpt: StrictStr = Field(..., min_length=1)
+
+    @field_validator("text_excerpt")
+    @classmethod
+    def must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Value cannot be blank.")
+        return value
+
+
 class ContractClause(StrictSchemaModel):
     # Represents one extracted clause from the contract.
     # Each clause must be traceable through page_number and evidence_ref.
@@ -96,7 +123,22 @@ class ContractClause(StrictSchemaModel):
     structured_fields: dict[str, PrimitiveValue] = Field(default_factory=dict)
 
     # bbox is optional because synthetic fallback may not have PDF coordinates.
+    # It mirrors the first location's bbox for backward compatibility.
     bbox: BoundingBox | None = None
+
+    # locations records every page the clause spans, enabling multi-page
+    # aggregation and bbox-level traceability. It defaults to empty so existing
+    # single-location fixtures (which only carry page_number/bbox) stay valid.
+    locations: list[ClauseLocation] = Field(default_factory=list)
+
+    # evidence_ids references the clause-level evidence items created in
+    # evidence_index.json (one per location). Defaults to empty for fixtures
+    # that only carry the legacy evidence_ref string.
+    evidence_ids: list[StrictStr] = Field(default_factory=list)
+
+    # requires_manual_review is set when the clause confidence falls below the
+    # configured threshold. Agent B only flags; it never makes risk decisions.
+    requires_manual_review: StrictBool = False
 
     @field_validator("clause_id", "text", "evidence_ref")
     @classmethod

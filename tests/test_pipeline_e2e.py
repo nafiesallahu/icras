@@ -1,133 +1,95 @@
+"""ICRAS end-to-end pipeline integration test (Agent A -> Agent B).
+
+This deterministic integration test runs the real intake agent (Agent A) on a
+born-digital contract bundle and then the extraction agent (Agent B) in live
+mode, asserting that the two agents integrate: Agent A produces an isolated run
+directory with a context packet, and Agent B parses the snapshot PDF into a
+validated ``extracted_contract.json`` plus updated evidence index, audit log,
+and metrics.
+
+The suite is hermetic: Agent A writes into a temporary runs root and the test
+controls environment routing via monkeypatch, so it never touches the
+repository ``runs/`` directory.
 """
-ICRAS End-to-End Pipeline Integration Test
-------------------------------------------
-This file executes a deterministic integration test between:
-  1. IntakeAgent (Agent A) - Handles data ingestion and run directory creation.
-  2. ExtractionAgent (Agent B) - Manages context reading and triggers the 
-     Synthetic Fallback Engine under test environments.
 
-Usage:
-    python -m tests.test_pipeline_e2e
-"""
-
-
-
-import os
-import shutil
-import logging
+import json
 from pathlib import Path
-from pydantic import ValidationError
-from app.agents.intake_agent import IntakeAgent
+
+import pytest
+
+pytest.importorskip("pdfplumber")
+
 from app.agents.extraction_agent import ExtractionAgent
+from app.agents.intake_agent import IntakeAgent
 from app.schemas.context_packet import ContextPacket
 from app.schemas.extracted_contract import ExtractedContract
 
-# Setup minimal logging to track orchestrator execution
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-logger = logging.getLogger(__name__)
+REPO_ROOT = Path(__file__).resolve().parents[1]
+SCENARIO_03 = (
+    REPO_ROOT / "data" / "bundles" / "scenario_03_net_90_payment_terms"
+)
 
-def setup_integration_environment() -> Path:
-    """Prepares a mock source folder to simulate raw contract ingestion."""
-    bundle_dir = Path("data/bundle_e2e_test")
-    bundle_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Write a dummy contract file so the Intake scanning logic passes successfully
-    mock_file = bundle_dir / "raw_incoming_contract.txt"
-    mock_file.write_text("ICRAS End-to-End Pipeline Mock Content")
-    
-    # Enforce test mode via environment variables to trigger the Synthetic Fallback Engine
-    os.environ["ENV_MODE"] = "test"
-    os.environ["MOCK_PIPELINE"] = "True"
-    
-    return bundle_dir
 
-def run_e2e_pipeline_test():
-    print("\n======================================================================")
-    print("STARTING INTEGRATION TEST: INTAKE AGENT (A) -> EXTRACTION AGENT (B)")
-    print("======================================================================")
-    
-    bundle_dir = setup_integration_environment()
-    
-    # Initialize both architectural agents
-    intake_agent = IntakeAgent()          # Intake Agent (A)
-    extraction_agent = ExtractionAgent()  # Extraction Agent (B)
-    
-    run_dir_created = None
-    
-    try:
-        # --------------------------------------------------------------------
-        # PHASE 1: Execute IntakeAgent (Agent A)
-        # --------------------------------------------------------------------
-        print("\n[PHASE 1] Executing IntakeAgent (Agent A) - Data Ingestion...")
-        print(f"-> Scanning input directory: {bundle_dir}")
-        
-        context_packet: ContextPacket = intake_agent.run(
-            bundle_path=str(bundle_dir),
-            document_type="SERVICES_AGREEMENT"
-        )
-        
-        print(f"✅ IntakeAgent (Agent A) Success!")
-        print(f"   - Generated Contract ID: {context_packet.contract_id}")
-        print(f"   - Ingestion ISO Timestamp: {context_packet.received_timestamp}")
-        
-        # Locate the physical run directory created dynamically under runs/
-        runs_root = Path("runs")
-        matching_dirs = list(runs_root.glob(f"*{context_packet.contract_id}"))
-        assert len(matching_dirs) == 1, "Verification Failure: Run runtime execution directory was not found!"
-        run_dir_created = matching_dirs[0]
-        print(f"📍 Isolated Run Directory Created: {run_dir_created}")
-        
-        # Confirm context_packet.json exists on disk
-        assert (run_dir_created / "context_packet.json").exists(), "Verification Failure: context_packet.json missing from run directory!"
-        print("✅ Found 'context_packet.json' on disk.")
+def test_intake_then_live_extraction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Live mode: ensure synthetic routing is disabled.
+    monkeypatch.delenv("ENV_MODE", raising=False)
+    monkeypatch.delenv("MOCK_PIPELINE", raising=False)
 
-        # --------------------------------------------------------------------
-        # PHASE 2: Execute ExtractionAgent (Agent B)
-        # --------------------------------------------------------------------
-        print("\n[PHASE 2] Executing ExtractionAgent (Agent B) - Orchestrated Extraction...")
-        print("-> Intercepting live LLM paths. Routing directly to Synthetic Fallback Engine.")
-        
-        # We test using Scenario 03 (Net 90 terms) passing the short string "3" to verify normalization
-        extracted_contract: ExtractedContract = extraction_agent.run(
-            run_directory=str(run_dir_created),
-            scenario_id="3"
-        )
-        
-        # --------------------------------------------------------------------
-        # PHASE 3: Complete Pipeline Contract Verification
-        # --------------------------------------------------------------------
-        print("\n[PHASE 3] Running End-to-End Pipeline Integrity Controls...")
-        
-        # Control 1: Check if the artifact was stored correctly inside the shared directory
-        final_json_file = run_dir_created / "extracted_contract.json"
-        assert final_json_file.exists(), "Verification Failure: extracted_contract.json was not persisted by Agent B!"
-        print("✅ Pipeline Integrity Passed: 'extracted_contract.json' successfully found in the execution directory.")
-        
-        # Control 2: Ensure type instance safety
-        assert isinstance(extracted_contract, ExtractedContract), "Verification Failure: Return type is not a strict ExtractedContract instance!"
-        print(f"✅ Instance Type Control Passed: Validated schema version {extracted_contract.schema_version}")
-        
-        # Control 3: Confirm Scenario 03 values loaded correctly
-        # Scenario 03 focuses on parsing extended payment windows
-        print(f"ℹ️ Extracted Contract ID from JSON: {extracted_contract.contract_id}")
-        print(f"ℹ️ Verified Scenario Content Baseline (Overall Confidence Score): {extracted_contract.overall_confidence_score}")
+    # PHASE 1: Agent A intake.
+    intake_agent = IntakeAgent(runs_root=tmp_path / "runs")
+    context_packet: ContextPacket = intake_agent.run(str(SCENARIO_03))
 
-        print("\n======================================================================")
-        print("🎉 SUCCESS: Intake Agent (A) & Extraction Agent (B) Are Fully Integrated!")
-        print("======================================================================")
-        
-    except Exception as e:
-        print(f"\n❌ PIPELINE INTEGRATION TEST FAILED: {str(e)}")
-        raise e
-        
-    finally:
-        # Automated workspace environment clean-up
-        print("\n-> Cleaning up temporary testing execution workspaces...")
-        if bundle_dir.exists():
-            shutil.rmtree(bundle_dir)
-        if run_dir_created and run_dir_created.exists():
-            shutil.rmtree(run_dir_created)
-        print("✅ Clean-up finished. System environment reset successfully.")
+    run_dir = Path(context_packet.run_directory)
+    assert run_dir.is_dir()
+    assert (run_dir / "context_packet.json").is_file()
+    assert (run_dir / "evidence_index.json").is_file()
 
-if __name__ == "__main__":
-    run_e2e_pipeline_test()
+    # PHASE 2: Agent B live extraction.
+    extracted: ExtractedContract = extraction_agent_run(run_dir)
+
+    # PHASE 3: Integrity checks across the shared run directory.
+    assert (run_dir / "extracted_contract.json").is_file()
+    assert isinstance(extracted, ExtractedContract)
+    assert extracted.extraction_mode.value == "pdf_parser"
+    assert extracted.contract_id == context_packet.contract_id
+
+    payment = [
+        c for c in extracted.clauses if c.clause_type.value == "payment_terms"
+    ]
+    assert payment
+    assert payment[0].structured_fields["payment_terms_days"] == 90
+
+    # Evidence, audit, and metrics were all updated by Agent B.
+    index = json.loads((run_dir / "evidence_index.json").read_text())
+    assert index["evidence_items"]
+
+    audit = (run_dir / "audit_log.md").read_text()
+    assert "## Step 1: Intake" in audit
+    assert "## Step 2: Clause Extraction" in audit
+
+    metrics = json.loads((run_dir / "metrics.json").read_text())
+    assert metrics["agents_completed"] == ["intake", "extraction"]
+
+
+def test_intake_then_env_forced_synthetic(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    intake_agent = IntakeAgent(runs_root=tmp_path / "runs")
+    context_packet = intake_agent.run(str(SCENARIO_03))
+
+    monkeypatch.setenv("ENV_MODE", "test")
+    extracted = ExtractionAgent().run(
+        context_packet.run_directory, scenario_id="3"
+    )
+
+    assert extracted.extraction_mode.value == "synthetic_fallback"
+    assert (
+        Path(context_packet.run_directory) / "extracted_contract.json"
+    ).is_file()
+
+
+def extraction_agent_run(run_dir: Path) -> ExtractedContract:
+    """Run Agent B in live mode against an existing run directory."""
+    return ExtractionAgent().run(str(run_dir))

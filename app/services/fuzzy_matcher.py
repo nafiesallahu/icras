@@ -1,9 +1,56 @@
 from __future__ import annotations
 
 import csv
+import unicodedata
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+
+REQUIRED_VENDOR_COLUMNS = (
+    "vendor_id",
+    "vendor_name",
+    "country",
+    "status",
+    "risk_level",
+)
+
+# Common legal suffixes that may be written in different but equivalent forms.
+#
+# The mapping is intentionally conservative:
+# - it only changes the final word of a company name;
+# - it does not remove the legal suffix;
+# - it does not remove other meaningful company-name words.
+#
+# Examples:
+# "Acme Limited" -> "acme ltd"
+# "Acme Ltd."    -> "acme ltd"
+LEGAL_SUFFIX_ALIASES: dict[str, str] = {
+    "limited": "ltd",
+    "ltd": "ltd",
+    "incorporated": "inc",
+    "inc": "inc",
+    "corporation": "corp",
+    "corp": "corp",
+    "company": "co",
+    "co": "co",
+    "llc": "llc",
+    "plc": "plc",
+    "gmbh": "gmbh",
+}
+
+
+# Periods and apostrophes are removed instead of replaced with spaces.
+#
+# This allows abbreviations such as:
+# "L.L.C." -> "llc"
+# "S.A."   -> "sa"
+# "O'Reilly" -> "oreilly"
+PUNCTUATION_TO_REMOVE = {
+    ".",
+    "'",
+    "’",
+    "`",
+}
 
 # Locate the root directory of the repository.
 #
@@ -35,6 +82,104 @@ REQUIRED_VENDOR_COLUMNS = (
     "status",
     "risk_level",
 )
+
+
+def normalize_company_name(name: str) -> str:
+    """
+    Normalize a company name before fuzzy matching.
+
+    The normalization process is deterministic and performs these steps:
+
+    1. validates that the input is a non-empty string;
+    2. applies Unicode compatibility normalization;
+    3. converts text to lowercase using casefold();
+    4. removes surrounding whitespace;
+    5. converts ampersands to the word "and";
+    6. removes periods and apostrophes;
+    7. converts other punctuation into spaces;
+    8. collapses duplicated whitespace;
+    9. canonicalizes common legal suffix variations.
+
+    Meaningful company-name words are preserved.
+    """
+
+    # Reject non-string values with a clear error.
+    if not isinstance(name, str):
+        raise TypeError("Company name must be provided as a string.")
+
+    # NFKC converts visually equivalent Unicode forms into one
+    # consistent representation.
+    #
+    # casefold() is stronger and more Unicode-aware than lower().
+    normalized_name = unicodedata.normalize(
+        "NFKC",
+        name,
+    ).casefold()
+
+    # Remove spaces at the beginning and end.
+    normalized_name = normalized_name.strip()
+
+    if not normalized_name:
+        raise ValueError("Company name must not be empty.")
+
+    normalized_characters: list[str] = []
+
+    for character in normalized_name:
+        # Treat "&" as the word "and".
+        #
+        # This allows:
+        # "Acme & Sons Ltd"
+        # "Acme and Sons Limited"
+        #
+        # to normalize to the same value.
+        if character == "&":
+            normalized_characters.append(" and ")
+            continue
+
+        # Remove periods and apostrophes without inserting spaces.
+        #
+        # Example:
+        # "L.L.C." becomes "llc", not "l l c".
+        if character in PUNCTUATION_TO_REMOVE:
+            continue
+
+        # Unicode punctuation categories begin with "P".
+        #
+        # Commas, hyphens, slashes, brackets, and similar punctuation
+        # are converted to spaces so adjacent meaningful words remain
+        # separate.
+        if unicodedata.category(character).startswith("P"):
+            normalized_characters.append(" ")
+            continue
+
+        # Preserve letters, numbers, and existing whitespace.
+        normalized_characters.append(character)
+
+    normalized_name = "".join(normalized_characters)
+
+    # split() without an argument removes leading/trailing whitespace
+    # and collapses any number of spaces, tabs, or line breaks.
+    normalized_name = " ".join(normalized_name.split())
+
+    if not normalized_name:
+        raise ValueError("Company name contains no usable characters.")
+
+    # Split the normalized name into words.
+    name_tokens = normalized_name.split()
+
+    # Only canonicalize the final word because legal entity suffixes
+    # normally appear at the end of company names.
+    #
+    # This avoids modifying the same word when it is part of the
+    # company's meaningful name elsewhere.
+    final_token = name_tokens[-1]
+
+    name_tokens[-1] = LEGAL_SUFFIX_ALIASES.get(
+        final_token,
+        final_token,
+    )
+
+    return " ".join(name_tokens)
 
 
 class VendorMasterError(Exception):

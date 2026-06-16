@@ -10,6 +10,7 @@ from app.services.fuzzy_matcher import (
     VendorRecord,
     load_vendor_master,
     load_vendor_master_for_run,
+    normalize_company_name,
 )
 
 
@@ -221,3 +222,90 @@ def test_policy_vendor_master_is_used_as_fallback(
 
     assert len(records) == 1
     assert records[0].vendor_id == "V001"
+
+
+def test_normalize_company_name_handles_casing() -> None:
+    """
+    Company-name capitalization must not affect matching.
+    """
+    first_name = normalize_company_name("Acme Services Gmbh")
+
+    second_name = normalize_company_name("ACME Services GmbH")
+
+    third_name = normalize_company_name("acme services gmbh")
+
+    assert first_name == "acme services gmbh"
+    assert first_name == second_name
+    assert second_name == third_name
+
+
+def test_normalize_company_name_handles_spacing() -> None:
+    """
+    Leading, trailing, and duplicated whitespace must be removed.
+    """
+    normalized_name = normalize_company_name("   Acme    Services     GmbH   ")
+
+    assert normalized_name == "acme services gmbh"
+
+
+def test_normalize_company_name_handles_punctuation() -> None:
+    """
+    Common punctuation differences must not change the normalized name.
+    """
+    name_without_punctuation = normalize_company_name("Acme Services GmbH")
+
+    name_with_period = normalize_company_name("Acme Services GmbH.")
+
+    name_with_commas = normalize_company_name("Acme, Services, GmbH")
+
+    assert name_without_punctuation == "acme services gmbh"
+    assert name_with_period == name_without_punctuation
+    assert name_with_commas == name_without_punctuation
+
+
+def test_normalize_company_name_handles_suffix_variations() -> None:
+    """
+    Equivalent common legal suffix variations must be canonicalized.
+    """
+    full_suffix = normalize_company_name("Acme Holdings Limited")
+
+    abbreviated_suffix = normalize_company_name("Acme Holdings Ltd.")
+
+    dotted_suffix = normalize_company_name("Example L.L.C.")
+
+    plain_suffix = normalize_company_name("Example LLC")
+
+    assert full_suffix == "acme holdings ltd"
+    assert abbreviated_suffix == "acme holdings ltd"
+    assert full_suffix == abbreviated_suffix
+
+    assert dotted_suffix == "example llc"
+    assert dotted_suffix == plain_suffix
+
+
+def test_normalize_company_name_preserves_meaningful_words() -> None:
+    """
+    Normalization must preserve the company's meaningful name words.
+    """
+    normalized_name = normalize_company_name("Acme Global Technology Services GmbH")
+
+    assert normalized_name == ("acme global technology services gmbh")
+
+    assert "global" in normalized_name
+    assert "technology" in normalized_name
+    assert "services" in normalized_name
+
+
+def test_normalize_company_name_is_deterministic() -> None:
+    """
+    The same input must always produce exactly the same output.
+    """
+    company_name = "  ACME, Services GmbH.  "
+
+    first_result = normalize_company_name(company_name)
+    second_result = normalize_company_name(company_name)
+    third_result = normalize_company_name(company_name)
+
+    assert first_result == "acme services gmbh"
+    assert first_result == second_result
+    assert second_result == third_result

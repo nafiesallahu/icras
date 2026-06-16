@@ -3,11 +3,14 @@ from pathlib import Path
 import pytest
 
 from app.services.fuzzy_matcher import (
+    DEFAULT_MATCH_THRESHOLD,
     EmptyVendorMasterError,
+    FuzzyMatchResult,
     VendorMasterNotFoundError,
     VendorMasterRowError,
     VendorMasterSchemaError,
     VendorRecord,
+    find_best_vendor_match,
     load_vendor_master,
     load_vendor_master_for_run,
     normalize_company_name,
@@ -33,6 +36,31 @@ def write_csv(
         content,
         encoding="utf-8",
     )
+
+
+def sample_vendor_records() -> list[VendorRecord]:
+    """
+    Return structured vendors used by fuzzy-matching tests.
+
+    Both vendors are approved so exact and near-exact matches can
+    verify that the accepted record retains its vendor-master status.
+    """
+    return [
+        VendorRecord(
+            vendor_id="V001",
+            vendor_name="Acme Services GmbH",
+            country="Germany",
+            status="approved",
+            risk_level="low",
+        ),
+        VendorRecord(
+            vendor_id="V002",
+            vendor_name="Global Data Ltd",
+            country="United Kingdom",
+            status="approved",
+            risk_level="medium",
+        ),
+    ]
 
 
 def test_load_vendor_master_returns_structured_records(
@@ -309,3 +337,159 @@ def test_normalize_company_name_is_deterministic() -> None:
     assert first_result == "acme services gmbh"
     assert first_result == second_result
     assert second_result == third_result
+
+
+def test_find_best_vendor_match_accepts_exact_match() -> None:
+    """
+    An identical normalized company name must produce score 100
+    and return the approved official vendor.
+    """
+    result = find_best_vendor_match(
+        "Acme Services GmbH",
+        sample_vendor_records(),
+    )
+
+    assert isinstance(result, FuzzyMatchResult)
+    assert result.match_score == 100
+    assert result.threshold == DEFAULT_MATCH_THRESHOLD
+    assert result.match_status == "matched"
+
+    assert result.best_candidate.vendor_id == "V001"
+    assert result.matched_vendor is not None
+    assert result.matched_vendor.vendor_id == "V001"
+    assert result.matched_vendor.status == "approved"
+
+
+def test_find_best_vendor_match_accepts_typo_match() -> None:
+    """
+    A small spelling mistake should still exceed the default threshold.
+
+    "Servces" intentionally omits the second letter "i".
+    """
+    result = find_best_vendor_match(
+        "Acme Servces GmbH",
+        sample_vendor_records(),
+    )
+
+    assert 85 <= result.match_score < 100
+    assert result.match_status == "matched"
+
+    assert result.matched_vendor is not None
+    assert result.matched_vendor.vendor_id == "V001"
+    assert result.matched_vendor.status == "approved"
+
+
+def test_find_best_vendor_match_handles_casing_mismatch() -> None:
+    """
+    Case differences disappear during deterministic normalization.
+    """
+    result = find_best_vendor_match(
+        "ACME SERVICES GMBH",
+        sample_vendor_records(),
+    )
+
+    assert result.normalized_input_name == "acme services gmbh"
+    assert result.match_score == 100
+    assert result.match_status == "matched"
+
+    assert result.matched_vendor is not None
+    assert result.matched_vendor.vendor_id == "V001"
+
+
+def test_find_best_vendor_match_rejects_weak_match() -> None:
+    """
+    A partially similar name below threshold must remain unknown.
+    """
+    result = find_best_vendor_match(
+        "Acme Solutions GmbH",
+        sample_vendor_records(),
+    )
+
+    # Acme Services remains the closest candidate,
+    # but its score is too weak to accept.
+    assert result.best_candidate.vendor_id == "V001"
+    assert result.match_score < DEFAULT_MATCH_THRESHOLD
+
+    assert result.match_status == "unknown"
+    assert result.matched_vendor is None
+
+
+def test_find_best_vendor_match_returns_unknown_for_no_match() -> None:
+    """
+    A materially unrelated company name must not be linked to a vendor.
+    """
+    result = find_best_vendor_match(
+        "Zebra Quantum Mining PLC",
+        sample_vendor_records(),
+    )
+
+    # The service still records the numerically closest candidate
+    # for auditability, but does not accept it.
+    assert result.best_candidate is not None
+    assert result.match_score < DEFAULT_MATCH_THRESHOLD
+
+    assert result.match_status == "unknown"
+    assert result.matched_vendor is None
+
+
+def test_find_best_vendor_match_uses_configurable_threshold() -> None:
+    """
+    The same score may be accepted or rejected depending on the
+    configured corporate threshold.
+
+    A score equal to the threshold must be accepted.
+    """
+    vendors = sample_vendor_records()
+    counterparty_name = "Acme Servces GmbH"
+
+    # First discover the deterministic score for the typo.
+    default_result = find_best_vendor_match(
+        counterparty_name,
+        vendors,
+    )
+
+    # Equal-to-threshold must count as matched.
+    equal_threshold_result = find_best_vendor_match(
+        counterparty_name,
+        vendors,
+        threshold=default_result.match_score,
+    )
+
+    # One point above the score must reject the same candidate.
+    stricter_result = find_best_vendor_match(
+        counterparty_name,
+        vendors,
+        threshold=default_result.match_score + 1,
+    )
+
+    assert equal_threshold_result.match_status == "matched"
+    assert equal_threshold_result.matched_vendor is not None
+
+    assert stricter_result.match_status == "unknown"
+    assert stricter_result.matched_vendor is None
+
+
+def test_find_best_vendor_match_is_deterministic() -> None:
+    """
+    Repeated matching with identical input and vendor data must produce
+    exactly the same structured result.
+    """
+    vendors = sample_vendor_records()
+
+    first_result = find_best_vendor_match(
+        "Acme Servces GmbH",
+        vendors,
+    )
+
+    second_result = find_best_vendor_match(
+        "Acme Servces GmbH",
+        vendors,
+    )
+
+    third_result = find_best_vendor_match(
+        "Acme Servces GmbH",
+        vendors,
+    )
+
+    assert first_result.model_dump() == second_result.model_dump()
+    assert second_result.model_dump() == third_result.model_dump()

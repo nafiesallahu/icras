@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import csv
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from rapidfuzz import fuzz
 
 REQUIRED_VENDOR_COLUMNS = (
     "vendor_id",
@@ -82,6 +85,15 @@ REQUIRED_VENDOR_COLUMNS = (
     "status",
     "risk_level",
 )
+
+# Minimum score required for a vendor to be accepted as a match.
+#
+# Scores range from 0 to 100:
+# - 100 means the normalized names are identical;
+# - lower values indicate weaker similarity.
+#
+# A score below 85 is classified as unknown by default.
+DEFAULT_MATCH_THRESHOLD = 85
 
 
 def normalize_company_name(name: str) -> str:
@@ -270,6 +282,182 @@ class VendorRecord(BaseModel):
         ...,
         min_length=1,
         description="Vendor risk level.",
+    )
+
+
+# The matcher produces only one of these two decisions.
+#
+# matched:
+# The best score is equal to or above the configured threshold.
+#
+# unknown:
+# The best score is below the configured threshold.
+MatchStatus = Literal[
+    "matched",
+    "unknown",
+]
+
+
+class FuzzyMatchResult(BaseModel):
+    """
+    Structured result returned by the fuzzy-matching service.
+
+    The result keeps both:
+
+    - best_candidate:
+    The vendor with the highest similarity score, even if that score
+    is too low to be accepted.
+
+    - matched_vendor:
+    The accepted vendor when the threshold is met. This is None when
+    the counterparty must be treated as unknown.
+
+    Keeping the best candidate supports debugging and auditability,
+    while matched_vendor prevents weak matches from being accepted.
+    """
+
+    model_config = ConfigDict(
+        # Reject undeclared result fields.
+        extra="forbid",
+        # Prevent the matching result from being reassigned.
+        frozen=True,
+        # Require correct primitive types.
+        strict=True,
+        # Remove surrounding whitespace from strings.
+        str_strip_whitespace=True,
+    )
+
+    # Original counterparty name passed into the matching service.
+    input_counterparty_name: str = Field(
+        ...,
+        min_length=1,
+    )
+
+    # Counterparty name after deterministic normalization.
+    normalized_input_name: str = Field(
+        ...,
+        min_length=1,
+    )
+
+    # Vendor with the highest RapidFuzz score.
+    #
+    # This remains available even when the score is below the threshold.
+    best_candidate: VendorRecord
+
+    # Accepted vendor when the score meets the threshold.
+    #
+    # This is None for unknown counterparties.
+    matched_vendor: VendorRecord | None = None
+
+    # Rounded RapidFuzz similarity score from 0 to 100.
+    match_score: int = Field(
+        ...,
+        ge=0,
+        le=100,
+    )
+
+    # Threshold used for this matching operation.
+    threshold: int = Field(
+        ...,
+        ge=0,
+        le=100,
+    )
+
+    # Final fuzzy-matching classification.
+    match_status: MatchStatus
+
+
+def find_best_vendor_match(
+    input_counterparty_name: str,
+    vendors: Sequence[VendorRecord],
+    *,
+    threshold: int = DEFAULT_MATCH_THRESHOLD,
+) -> FuzzyMatchResult:
+    """
+    Compare a counterparty name with all official vendor names.
+
+    Processing steps:
+
+    1. validate the threshold;
+    2. require at least one structured vendor record;
+    3. normalize the input counterparty name;
+    4. normalize every official vendor name;
+    5. calculate a RapidFuzz similarity score;
+    6. keep the vendor with the highest score;
+    7. accept it when its score is equal to or above the threshold;
+    8. otherwise classify the counterparty as unknown.
+
+    When two vendors have the same score, the first vendor in the
+    validated vendor-master order is retained. Because the loader
+    preserves CSV row order, repeated runs remain deterministic.
+    """
+
+    # bool is technically a subclass of int in Python.
+    # Reject it explicitly so True cannot accidentally become threshold 1.
+    if isinstance(threshold, bool) or not isinstance(threshold, int):
+        raise TypeError("Matching threshold must be an integer from 0 to 100.")
+
+    # Reject thresholds outside the RapidFuzz score range.
+    if threshold < 0 or threshold > 100:
+        raise ValueError("Matching threshold must be between 0 and 100.")
+
+    # The previous vendor-loader subtask already rejects an empty CSV,
+    # but this protects callers that invoke the matcher directly.
+    if not vendors:
+        raise ValueError("At least one vendor record is required for fuzzy matching.")
+
+    # Apply the deterministic normalization implemented in DZ-01.3.
+    normalized_input_name = normalize_company_name(input_counterparty_name)
+
+    best_candidate: VendorRecord | None = None
+    best_score = -1
+
+    for vendor_index, vendor in enumerate(vendors):
+        # Ensure callers provide structured records rather than
+        # unvalidated dictionaries.
+        if not isinstance(vendor, VendorRecord):
+            raise TypeError(
+                "Every vendor must be a VendorRecord instance. "
+                f"Invalid vendor at position {vendor_index}."
+            )
+
+        # Normalize the official vendor name using the exact same
+        # rules used for the input counterparty name.
+        normalized_vendor_name = normalize_company_name(vendor.vendor_name)
+
+        # fuzz.ratio returns a similarity score between 0 and 100.
+        raw_score = fuzz.ratio(
+            normalized_input_name,
+            normalized_vendor_name,
+        )
+
+        # Convert RapidFuzz's floating-point result into the integer
+        # required by NormalizedCounterparty.match_score.
+        candidate_score = int(round(raw_score))
+
+        # Replace the best candidate only when the new score is higher.
+        #
+        # We intentionally use ">" rather than ">=" so that equal scores
+        # retain the first vendor from the deterministic CSV order.
+        if candidate_score > best_score:
+            best_candidate = vendor
+            best_score = candidate_score
+
+    # The non-empty vendors check guarantees that a candidate was found.
+    if best_candidate is None:
+        raise RuntimeError("Fuzzy matching could not select a vendor candidate.")
+
+    # A score equal to the threshold is accepted.
+    is_accepted_match = best_score >= threshold
+
+    return FuzzyMatchResult(
+        input_counterparty_name=input_counterparty_name,
+        normalized_input_name=normalized_input_name,
+        best_candidate=best_candidate,
+        matched_vendor=(best_candidate if is_accepted_match else None),
+        match_score=best_score,
+        threshold=threshold,
+        match_status=("matched" if is_accepted_match else "unknown"),
     )
 
 

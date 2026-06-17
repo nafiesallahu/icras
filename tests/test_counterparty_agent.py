@@ -3,6 +3,7 @@ from pathlib import Path
 
 from app.agents.counterparty_agent import (
     COUNTERPARTY_NOT_FOUND_FLAG,
+    COUNTERPARTY_MISMATCH_FLAG,
     DEFAULT_COUNTERPARTY_MISMATCH_THRESHOLD,
     HIGH_RISK_COUNTERPARTY_FLAG,
     MANUAL_REVIEW_REQUIRED_FLAG,
@@ -11,8 +12,14 @@ from app.agents.counterparty_agent import (
     compare_counterparty_names,
     detect_counterparty_mismatch_from_run,
     read_counterparty_names,
+    NORMALIZED_COUNTERPARTY_FILENAME,
+    write_normalized_counterparty,
 )
-from app.schemas.finding import Severity, UnifiedFinding
+from app.schemas.finding import (
+    FindingRiskLevel,
+    Severity,
+    UnifiedFinding,
+)
 from app.schemas.normalized_counterparty import NormalizedCounterparty
 from app.services.fuzzy_matcher import (
     FuzzyMatchResult,
@@ -266,7 +273,7 @@ def test_new_vendor_returns_new_status_and_flag() -> None:
     assert result.risk_level == "medium"
 
     assert NEW_COUNTERPARTY_FLAG in result.flags
-    assert result.flags == ["new_counterparty"]
+    assert MANUAL_REVIEW_REQUIRED_FLAG in result.flags
 
 
 def test_unknown_counterparty_returns_null_vendor_fields() -> None:
@@ -305,6 +312,26 @@ def test_unknown_counterparty_returns_null_vendor_fields() -> None:
     assert COUNTERPARTY_NOT_FOUND_FLAG in result.flags
     assert MANUAL_REVIEW_REQUIRED_FLAG in result.flags
 
+    # The finding must be included in NormalizedCounterparty.
+    assert len(result.findings) == 1
+
+    finding = result.findings[0]
+
+    assert finding.finding_id == "CP-UNKNOWN-001"
+    assert finding.source_agent == "agent_c"
+    assert finding.category == "counterparty"
+    assert finding.severity == Severity.HIGH
+    assert finding.risk_level == FindingRiskLevel.HIGH
+    assert finding.score == 80
+    assert finding.finding_type == "unknown_counterparty"
+    assert finding.clause_id is None
+    assert finding.policy_rule == "vendor_master.match_required"
+    assert finding.expected is not None
+    assert finding.actual is not None
+    assert finding.recommendation is not None
+    assert finding.evidence_ids == []
+    assert finding.requires_human_review is True
+
 
 def test_high_risk_vendor_returns_high_risk_status_and_flag() -> None:
     """
@@ -338,6 +365,28 @@ def test_high_risk_vendor_returns_high_risk_status_and_flag() -> None:
 
     assert HIGH_RISK_COUNTERPARTY_FLAG in result.flags
     assert MANUAL_REVIEW_REQUIRED_FLAG in result.flags
+    assert COUNTERPARTY_NOT_FOUND_FLAG not in result.flags
+
+    # The finding must be included in NormalizedCounterparty.
+    assert len(result.findings) == 1
+
+    finding = result.findings[0]
+
+    assert finding.finding_id == "CP-HIGH-RISK-001"
+    assert finding.source_agent == "agent_c"
+    assert finding.category == "counterparty"
+    assert finding.severity == Severity.HIGH
+    assert finding.risk_level == FindingRiskLevel.HIGH
+    assert finding.score == 90
+    assert finding.finding_type == "high_risk_counterparty"
+    assert finding.clause_id is None
+    assert finding.policy_rule == "vendor_master.high_risk_review"
+    assert finding.expected is not None
+    assert finding.actual is not None
+    assert finding.recommendation is not None
+    assert finding.evidence_ids == []
+    assert finding.requires_human_review is True
+
 
 def test_high_risk_vendor_status_triggers_high_risk_classification() -> None:
     """
@@ -365,3 +414,156 @@ def test_high_risk_vendor_status_triggers_high_risk_classification() -> None:
     assert result.status == "high_risk"
     assert result.risk_level == "high"
     assert HIGH_RISK_COUNTERPARTY_FLAG in result.flags
+
+
+def test_counterparty_mismatch_flag_and_finding_are_in_normalized_output() -> None:
+    """
+    A material manifest-versus-contract mismatch must be preserved
+    as a finding and exposed through the counterparty_mismatch flag.
+    """
+
+    comparison = compare_counterparty_names(
+        "Acme Services GmbH",
+        "Global Data Ltd",
+    )
+
+    assert comparison.finding is not None
+
+    matched_vendor = VendorRecord(
+        vendor_id="V002",
+        vendor_name="Global Data Ltd",
+        country="United Kingdom",
+        status="approved",
+        risk_level="low",
+    )
+
+    match_result = create_match_result(
+        matched_vendor,
+        input_name="Global Data Ltd",
+        match_score=100,
+        accepted=True,
+    )
+
+    result = classify_counterparty_status(
+        match_result,
+        manifest_counterparty_name="Acme Services GmbH",
+        extracted_counterparty_name="Global Data Ltd",
+        findings=[comparison.finding],
+    )
+
+    assert COUNTERPARTY_MISMATCH_FLAG in result.flags
+    assert MANUAL_REVIEW_REQUIRED_FLAG in result.flags
+
+    mismatch_findings = [
+        finding
+        for finding in result.findings
+        if finding.finding_type == "counterparty_mismatch"
+    ]
+
+    assert len(mismatch_findings) == 1
+
+    finding = mismatch_findings[0]
+
+    assert finding.source_agent == "agent_c"
+    assert finding.category == "counterparty"
+    assert finding.severity == Severity.HIGH
+    assert finding.risk_level == FindingRiskLevel.HIGH
+    assert finding.score == 85
+    assert finding.requires_human_review is True
+
+
+def test_agent_c_finding_contains_all_required_unified_fields() -> None:
+    """
+    Every Agent C finding serialized into normalized_counterparty.json
+    must contain the required unified finding keys.
+    """
+
+    vendor = VendorRecord(
+        vendor_id="V003",
+        vendor_name="Risk Vendor LLC",
+        country="HighRiskCountryX",
+        status="approved",
+        risk_level="high",
+    )
+
+    match_result = create_match_result(
+        vendor,
+        input_name="Risk Vendor LLC",
+        match_score=100,
+        accepted=True,
+    )
+
+    result = classify_counterparty_status(match_result)
+
+    serialized = result.model_dump(mode="json")
+
+    assert len(serialized["findings"]) == 1
+
+    finding_data = serialized["findings"][0]
+
+    required_fields = {
+        "finding_id",
+        "source_agent",
+        "category",
+        "severity",
+        "risk_level",
+        "score",
+        "finding_type",
+        "clause_id",
+        "policy_rule",
+        "expected",
+        "actual",
+        "recommendation",
+        "evidence_ids",
+        "requires_human_review",
+    }
+
+    assert required_fields.issubset(finding_data.keys())
+
+    assert finding_data["source_agent"] == "agent_c"
+    assert finding_data["category"] == "counterparty"
+
+
+def test_findings_are_written_to_normalized_counterparty_json(
+    tmp_path: Path,
+) -> None:
+    """
+    Agent C findings must be physically included in the final
+    normalized_counterparty.json artifact.
+    """
+
+    vendor = VendorRecord(
+        vendor_id="V003",
+        vendor_name="Risk Vendor LLC",
+        country="HighRiskCountryX",
+        status="approved",
+        risk_level="high",
+    )
+
+    match_result = create_match_result(
+        vendor,
+        input_name="Risk Vendor LLC",
+        match_score=100,
+        accepted=True,
+    )
+
+    result = classify_counterparty_status(match_result)
+
+    output_path = write_normalized_counterparty(
+        tmp_path,
+        result,
+    )
+
+    assert output_path.name == "normalized_counterparty.json"
+    assert output_path.is_file()
+
+    written_data = json.loads(output_path.read_text(encoding="utf-8"))
+
+    assert len(written_data["findings"]) == 1
+
+    finding_data = written_data["findings"][0]
+
+    assert finding_data["finding_type"] == ("high_risk_counterparty")
+    assert finding_data["source_agent"] == "agent_c"
+    assert finding_data["category"] == "counterparty"
+    assert finding_data["requires_human_review"] is True

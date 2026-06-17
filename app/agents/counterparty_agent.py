@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 from rapidfuzz import fuzz
-from collections.abc import Sequence
 
-from app.schemas.finding import Severity, UnifiedFinding
+from app.schemas.finding import (
+    FindingRiskLevel,
+    Severity,
+    UnifiedFinding,
+)
 
 # NormalizedCounterparty is the final structured Agent C result.
 from app.schemas.normalized_counterparty import NormalizedCounterparty
@@ -32,6 +36,7 @@ NEW_COUNTERPARTY_FLAG = "new_counterparty"
 COUNTERPARTY_NOT_FOUND_FLAG = "counterparty_not_found"
 HIGH_RISK_COUNTERPARTY_FLAG = "high_risk_counterparty"
 MANUAL_REVIEW_REQUIRED_FLAG = "manual_review_required"
+COUNTERPARTY_MISMATCH_FLAG = "counterparty_mismatch"
 
 
 # Vendor risk levels supported by NormalizedCounterparty.
@@ -58,10 +63,26 @@ HIGH_RISK_VENDOR_STATUSES = frozenset(
     }
 )
 
+# Every Agent C finding must identify its source and category.
+AGENT_C_SOURCE = "agent_c"
+COUNTERPARTY_CATEGORY = "counterparty"
+
+
+# Deterministic scores assigned to Agent C findings.
+#
+# These values are fixed rather than calculated at runtime,
+# which keeps repeated executions deterministic.
+UNKNOWN_COUNTERPARTY_SCORE = 80
+HIGH_RISK_COUNTERPARTY_SCORE = 90
+
+HIGH_COUNTERPARTY_MISMATCH_SCORE = 85
+MEDIUM_COUNTERPARTY_MISMATCH_SCORE = 60
+
 
 # These are the exact JSON locations Agent C must read.
 CONTEXT_PACKET_FILENAME = "context_packet.json"
 EXTRACTED_CONTRACT_FILENAME = "extracted_contract.json"
+NORMALIZED_COUNTERPARTY_FILENAME = "normalized_counterparty.json"
 
 MANIFEST_COUNTERPARTY_FIELD = "counterparty_name_from_manifest"
 EXTRACTED_PARTIES_FIELD = "parties"
@@ -348,49 +369,41 @@ def compare_counterparty_names(
     finding: UnifiedFinding | None = None
 
     if is_mismatch:
-        # Create the standardized finding used by the current project.
-        finding = UnifiedFinding(
-            # One manifest-versus-contract mismatch can exist per run,
-            # so this fixed ID remains deterministic.
+        # A configured medium mismatch uses a medium risk level and score.
+        if mismatch_severity == Severity.MEDIUM:
+            mismatch_risk_level = FindingRiskLevel.MEDIUM
+            mismatch_score = MEDIUM_COUNTERPARTY_MISMATCH_SCORE
+        else:
+            mismatch_risk_level = FindingRiskLevel.HIGH
+            mismatch_score = HIGH_COUNTERPARTY_MISMATCH_SCORE
+
+        mismatch_message = (
+            "counterparty_mismatch: The counterparty declared "
+            "in the manifest materially differs from the "
+            "counterparty extracted from the contract. "
+            f"Similarity score {similarity_score} is below "
+            f"the threshold {mismatch_threshold}."
+        )
+
+        finding = _create_agent_c_finding(
             finding_id="CP-MISMATCH-001",
-            # UnifiedFinding currently uses "field" rather than
-            # a separate category property.
-            # "counterparty" therefore represents the category.
-            field="counterparty",
-            # Configurable medium or high mismatch risk.
+            finding_type="counterparty_mismatch",
             severity=mismatch_severity,
-            # The message identifies this as a
-            # counterparty_mismatch finding.
-            message=(
-                "counterparty_mismatch: The counterparty declared "
-                "in the manifest materially differs from the "
-                "counterparty extracted from the contract. "
-                f"Similarity score {similarity_score} is below "
-                f"the threshold {mismatch_threshold}."
+            risk_level=mismatch_risk_level,
+            score=mismatch_score,
+            policy_rule="counterparty.names_must_match",
+            expected=manifest_counterparty_name,
+            actual=extracted_counterparty_name,
+            recommendation=(
+                "Manually review the contract and manifest "
+                "counterparty names before approval."
             ),
-            # Both JSON pointers are recorded so reviewers know
-            # exactly which inputs were compared.
+            message=mismatch_message,
             evidence_ref=(
                 "context_packet.json:"
                 "counterparty_name_from_manifest; "
                 "extracted_contract.json:"
                 "parties.counterparty_name"
-            ),
-            # This mismatch concerns party identity rather than
-            # one particular contract clause.
-            clause_id=None,
-            page_number=None,
-            bbox=None,
-            # Deterministic rule that triggered the finding.
-            policy_rule="counterparty.names_must_match",
-            # The manifest is the declared expected party.
-            expected_value=manifest_counterparty_name,
-            # Agent B's extracted party is the actual value.
-            actual_value=extracted_counterparty_name,
-            # Required downstream action.
-            recommendation=(
-                "Manually review the contract and manifest "
-                "counterparty names before approval."
             ),
         )
 
@@ -401,6 +414,54 @@ def compare_counterparty_names(
         mismatch_threshold=mismatch_threshold,
         is_mismatch=is_mismatch,
         finding=finding,
+    )
+
+
+def _create_agent_c_finding(
+    *,
+    finding_id: str,
+    finding_type: str,
+    severity: Severity,
+    risk_level: FindingRiskLevel,
+    score: int,
+    policy_rule: str,
+    expected: str,
+    actual: str,
+    recommendation: str,
+    message: str,
+    evidence_ref: str,
+) -> UnifiedFinding:
+    """
+    Create one standardized Agent C finding.
+
+    Using one builder guarantees that every Agent C finding has
+    the same required source, category, evidence, and review fields.
+    """
+
+    return UnifiedFinding(
+        # Required unified fields.
+        finding_id=finding_id,
+        source_agent=AGENT_C_SOURCE,
+        category=COUNTERPARTY_CATEGORY,
+        severity=severity,
+        risk_level=risk_level,
+        score=score,
+        finding_type=finding_type,
+        clause_id=None,
+        policy_rule=policy_rule,
+        expected=expected,
+        actual=actual,
+        recommendation=recommendation,
+        evidence_ids=[],
+        requires_human_review=True,
+        # Legacy compatibility fields.
+        field="counterparty",
+        message=message,
+        evidence_ref=evidence_ref,
+        page_number=None,
+        bbox=None,
+        expected_value=expected,
+        actual_value=actual,
     )
 
 
@@ -428,6 +489,34 @@ def detect_counterparty_mismatch_from_run(
     )
 
 
+def _append_unique_flag(
+    flags: list[str],
+    flag: str,
+) -> None:
+    """
+    Add a flag only when it is not already present.
+
+    This preserves deterministic ordering and prevents duplicates.
+    """
+
+    if flag not in flags:
+        flags.append(flag)
+
+
+def _has_finding_type(
+    findings: list[UnifiedFinding],
+    finding_type: str,
+) -> bool:
+    """
+    Check whether a finding type already exists.
+
+    This prevents duplicate findings if classification is called
+    more than once with the same existing findings.
+    """
+
+    return any(finding.finding_type == finding_type for finding in findings)
+
+
 def classify_counterparty_status(
     match_result: FuzzyMatchResult,
     *,
@@ -438,37 +527,23 @@ def classify_counterparty_status(
     """
     Convert a fuzzy vendor match into Agent C's normalized output.
 
-    Classification rules:
+    This function classifies the counterparty as:
 
-    1. No accepted vendor match:
-    status = unknown
-    risk_level = high
-    matched vendor fields = None
+    - approved
+    - new
+    - unknown
+    - high_risk
 
-    2. Matched vendor with high risk_level or a high-risk status:
-    status = high_risk
-    risk_level = high
-
-    3. Matched vendor with status new:
-    status = new
-
-    4. Matched vendor with status approved:
-    status = approved
-
-    Existing findings, such as a counterparty_mismatch finding from
-    DZ-01.5, may be passed into this function and preserved.
+    It also creates the required flags and findings.
     """
 
-    # Require the structured matching result created by
-    # find_best_vendor_match().
     if not isinstance(match_result, FuzzyMatchResult):
         raise TypeError("match_result must be a FuzzyMatchResult instance.")
 
-    # Create a separate list so this function never modifies
-    # the caller's original collection of findings.
+    # Copy existing findings, such as a mismatch finding,
+    # so the original list is not modified.
     normalized_findings = list(findings)
 
-    # Validate that every supplied finding follows the unified model.
     for finding_index, finding in enumerate(normalized_findings):
         if not isinstance(finding, UnifiedFinding):
             raise TypeError(
@@ -476,52 +551,115 @@ def classify_counterparty_status(
                 f"Invalid finding at position {finding_index}."
             )
 
-    # An unknown result must not expose an accepted vendor.
+    # Start with an empty flag list.
+    #
+    # Flags are added depending on the classification.
+    output_flags: list[str] = []
+
+    # If DZ-01.5 already created a counterparty mismatch finding,
+    # also add the required mismatch and manual-review flags.
+    if _has_finding_type(
+        normalized_findings,
+        "counterparty_mismatch",
+    ):
+        _append_unique_flag(
+            output_flags,
+            COUNTERPARTY_MISMATCH_FLAG,
+        )
+
+        _append_unique_flag(
+            output_flags,
+            MANUAL_REVIEW_REQUIRED_FLAG,
+        )
+
+    # ==========================================================
+    # UNKNOWN COUNTERPARTY
+    # ==========================================================
+    #
+    # The fuzzy matcher returned unknown because no vendor
+    # reached the configured matching threshold.
     if match_result.match_status == "unknown":
         if match_result.matched_vendor is not None:
             raise CounterpartyClassificationError(
                 "An unknown fuzzy-match result must not contain " "a matched_vendor."
             )
 
+        # Create the unknown_counterparty finding only once.
+        if not _has_finding_type(
+            normalized_findings,
+            "unknown_counterparty",
+        ):
+            normalized_findings.append(
+                _create_agent_c_finding(
+                    finding_id="CP-UNKNOWN-001",
+                    finding_type="unknown_counterparty",
+                    severity=Severity.HIGH,
+                    risk_level=FindingRiskLevel.HIGH,
+                    score=UNKNOWN_COUNTERPARTY_SCORE,
+                    policy_rule="vendor_master.match_required",
+                    expected=(
+                        "Counterparty should match an approved "
+                        "vendor in vendor_master.csv"
+                    ),
+                    actual=(
+                        "No vendor matched above the configured "
+                        f"threshold. Best score: "
+                        f"{match_result.match_score}"
+                    ),
+                    recommendation=(
+                        "Manually verify the counterparty and "
+                        "vendor master record before approval."
+                    ),
+                    message=(
+                        "unknown_counterparty: No acceptable "
+                        "vendor master match was found."
+                    ),
+                    evidence_ref="vendor_master.csv",
+                )
+            )
+
+        # Required flags for an unknown counterparty.
+        _append_unique_flag(
+            output_flags,
+            COUNTERPARTY_NOT_FOUND_FLAG,
+        )
+
+        _append_unique_flag(
+            output_flags,
+            MANUAL_REVIEW_REQUIRED_FLAG,
+        )
+
+        # Unknown counterparties must not expose the closest
+        # low-scoring candidate as an accepted vendor.
         return NormalizedCounterparty(
-            # Preserve the original name passed into the matcher.
             input_counterparty_name=(match_result.input_counterparty_name),
-            # Preserve the manifest and extraction values for audit.
-            manifest_counterparty_name=manifest_counterparty_name,
-            extracted_counterparty_name=extracted_counterparty_name,
-            # Unknown counterparties must not be connected to
-            # the closest low-scoring candidate.
+            manifest_counterparty_name=(manifest_counterparty_name),
+            extracted_counterparty_name=(extracted_counterparty_name),
             matched_vendor_id=None,
             matched_vendor_name=None,
-            # Preserve the best similarity score for auditability.
             match_score=match_result.match_score,
-            # Required unknown classification.
             status="unknown",
-            # Unknown counterparties require high-risk review.
             risk_level="high",
-            # Downstream workflow flags.
-            flags=[
-                COUNTERPARTY_NOT_FOUND_FLAG,
-                MANUAL_REVIEW_REQUIRED_FLAG,
-            ],
+            flags=output_flags,
             findings=normalized_findings,
         )
 
-    # A result classified as matched must contain the accepted vendor.
+    # ==========================================================
+    # MATCHED COUNTERPARTY
+    # ==========================================================
+
     matched_vendor = match_result.matched_vendor
 
     if matched_vendor is None:
         raise CounterpartyClassificationError(
-            "A matched fuzzy-match result must contain matched_vendor."
+            "A matched fuzzy-match result must contain " "matched_vendor."
         )
 
-    # Normalize metadata so differences such as "Approved",
-    # "APPROVED", and "approved" behave identically.
     vendor_status = matched_vendor.status.strip().casefold()
+
     vendor_risk_level = matched_vendor.risk_level.strip().casefold()
 
-    # NormalizedCounterparty only permits low, medium, or high.
-    if vendor_risk_level not in SUPPORTED_VENDOR_RISK_LEVELS:
+    if vendor_risk_level not in (SUPPORTED_VENDOR_RISK_LEVELS):
         raise CounterpartyClassificationError(
             "Unsupported vendor risk_level "
             f"'{matched_vendor.risk_level}' for vendor "
@@ -530,38 +668,101 @@ def classify_counterparty_status(
 
     output_status: str
     output_risk_level: str
-    output_flags: list[str]
 
-    # High risk takes priority over approved or new.
+    # ==========================================================
+    # HIGH-RISK COUNTERPARTY
+    # ==========================================================
     #
-    # For example, a vendor may have:
-    # status = new
-    # risk_level = high
+    # High risk has priority over approved or new.
     #
-    # The final Agent C status must be high_risk.
+    # Examples:
+    #
+    # status = approved, risk_level = high
+    # → high_risk
+    #
+    # status = blocked, risk_level = medium
+    # → high_risk
     if vendor_risk_level == "high" or vendor_status in HIGH_RISK_VENDOR_STATUSES:
         output_status = "high_risk"
         output_risk_level = "high"
-        output_flags = [
-            HIGH_RISK_COUNTERPARTY_FLAG,
-            MANUAL_REVIEW_REQUIRED_FLAG,
-        ]
 
+        # Required high-risk flag.
+        _append_unique_flag(
+            output_flags,
+            HIGH_RISK_COUNTERPARTY_FLAG,
+        )
+
+        # A high-risk vendor cannot be automatically approved.
+        _append_unique_flag(
+            output_flags,
+            MANUAL_REVIEW_REQUIRED_FLAG,
+        )
+
+        # Create the high_risk_counterparty finding only once.
+        if not _has_finding_type(
+            normalized_findings,
+            "high_risk_counterparty",
+        ):
+            normalized_findings.append(
+                _create_agent_c_finding(
+                    finding_id="CP-HIGH-RISK-001",
+                    finding_type=("high_risk_counterparty"),
+                    severity=Severity.HIGH,
+                    risk_level=FindingRiskLevel.HIGH,
+                    score=HIGH_RISK_COUNTERPARTY_SCORE,
+                    policy_rule=("vendor_master.high_risk_review"),
+                    expected=(
+                        "Counterparty should not be " "classified as a high-risk vendor"
+                    ),
+                    actual=(
+                        f"Matched vendor "
+                        f"'{matched_vendor.vendor_name}' has "
+                        f"status '{matched_vendor.status}' and "
+                        f"risk level "
+                        f"'{matched_vendor.risk_level}'"
+                    ),
+                    recommendation=(
+                        "Require manual procurement and "
+                        "compliance review before approval."
+                    ),
+                    message=(
+                        "high_risk_counterparty: The matched "
+                        "vendor is classified as high risk."
+                    ),
+                    evidence_ref="vendor_master.csv",
+                )
+            )
+
+    # ==========================================================
+    # NEW COUNTERPARTY
+    # ==========================================================
     elif vendor_status == "new":
         output_status = "new"
         output_risk_level = vendor_risk_level
-        output_flags = [
-            NEW_COUNTERPARTY_FLAG,
-        ]
 
+        _append_unique_flag(
+            output_flags,
+            NEW_COUNTERPARTY_FLAG,
+        )
+
+        # A new vendor is not yet safely approved.
+        _append_unique_flag(
+            output_flags,
+            MANUAL_REVIEW_REQUIRED_FLAG,
+        )
+
+    # ==========================================================
+    # APPROVED COUNTERPARTY
+    # ==========================================================
     elif vendor_status == "approved":
         output_status = "approved"
         output_risk_level = vendor_risk_level
-        output_flags = []
+
+        # No vendor-status flag is needed for an approved vendor.
+        #
+        # A mismatch flag may still already exist in output_flags.
 
     else:
-        # Do not silently classify unsupported vendor statuses.
-        # A clear exception allows the orchestrator to fail safely.
         raise CounterpartyClassificationError(
             "Unsupported vendor status "
             f"'{matched_vendor.status}' for vendor "
@@ -570,15 +771,46 @@ def classify_counterparty_status(
 
     return NormalizedCounterparty(
         input_counterparty_name=(match_result.input_counterparty_name),
-        manifest_counterparty_name=manifest_counterparty_name,
-        extracted_counterparty_name=extracted_counterparty_name,
-        # Accepted matches retain the official vendor details.
+        manifest_counterparty_name=(manifest_counterparty_name),
+        extracted_counterparty_name=(extracted_counterparty_name),
         matched_vendor_id=matched_vendor.vendor_id,
         matched_vendor_name=matched_vendor.vendor_name,
-        # Preserve the RapidFuzz score.
         match_score=match_result.match_score,
         status=output_status,
         risk_level=output_risk_level,
         flags=output_flags,
         findings=normalized_findings,
     )
+
+
+def write_normalized_counterparty(
+    run_dir: str | Path,
+    result: NormalizedCounterparty,
+) -> Path:
+    """
+    Serialize Agent C's final result to normalized_counterparty.json.
+
+    The returned path allows the orchestrator and tests to verify
+    exactly where the artifact was written.
+    """
+
+    if not isinstance(result, NormalizedCounterparty):
+        raise TypeError("result must be a NormalizedCounterparty instance.")
+
+    output_path = Path(run_dir) / NORMALIZED_COUNTERPARTY_FILENAME
+
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_path.write_text(
+        json.dumps(
+            result.model_dump(mode="json"),
+            indent=2,
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+
+    return output_path

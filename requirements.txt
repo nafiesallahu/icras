@@ -21,6 +21,12 @@ cffi==2.0.0
 charset-normalizer==3.4.7
 pycparser==3.0
 
+# Optional Streamlit demo UI dependencies (app/ui.py). Only required if you run
+# the dashboard; the one-command CLI demo does not depend on these.
+streamlit==1.57.0
+pandas==3.0.2
+plotly==6.0.1
+
 # Please install the requirements by running the following command:
 # ```bash
 # pip install -r requirements.txt

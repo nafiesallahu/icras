@@ -871,3 +871,44 @@ def test_audit_and_metrics_record_human_review_for_high_risk_vendor(
     assert agent_c_metrics["counterparty_status"] == "high_risk"
     assert agent_c_metrics["flags_count"] == 2
     assert agent_c_metrics["human_review_required"] is True
+
+
+def test_counterparty_agent_output_is_deterministic(
+    tmp_path: Path,
+) -> None:
+    """
+    Identical Agent C inputs must produce identical normalized
+    counterparty results and identical JSON output.
+    """
+
+    # Create two separate run directories containing
+    # exactly the same synthetic input data.
+    first_run_dir = create_complete_agent_c_run(tmp_path / "first")
+
+    second_run_dir = create_complete_agent_c_run(tmp_path / "second")
+
+    # Execute Agent C independently for both runs.
+    first_result = run_counterparty_agent(first_run_dir)
+
+    second_result = run_counterparty_agent(second_run_dir)
+
+    # The validated Pydantic results must be identical.
+    assert first_result == second_result
+
+    first_output = (first_run_dir / NORMALIZED_COUNTERPARTY_FILENAME).read_text(
+        encoding="utf-8"
+    )
+
+    second_output = (second_run_dir / NORMALIZED_COUNTERPARTY_FILENAME).read_text(
+        encoding="utf-8"
+    )
+
+    # The actual JSON files must also be byte-for-byte identical.
+    assert first_output == second_output
+
+    # Confirm both outputs still validate against the schema.
+    first_validated = NormalizedCounterparty.model_validate_json(first_output)
+
+    second_validated = NormalizedCounterparty.model_validate_json(second_output)
+
+    assert first_validated == second_validated

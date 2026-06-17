@@ -691,10 +691,18 @@ def test_run_counterparty_agent_executes_full_flow(
 
     audit_content = (run_dir / "audit_log.md").read_text(encoding="utf-8")
 
-    assert "Agent C — Counterparty Resolution" in audit_content
-    assert "status: completed" in audit_content
-    assert "V001" in audit_content
-    assert "approved" in audit_content
+    assert "Agent C — Step 3: Counterparty Resolution" in audit_content
+
+    assert "counterparty_resolution: completed" in audit_content
+    assert "input_name: Acme Services Gmbh" in audit_content
+    assert "manifest_name: Acme Services GmbH" in audit_content
+    assert "extracted_name: Acme Services Gmbh" in audit_content
+    assert "matched_vendor_id: V001" in audit_content
+    assert "matched_vendor: Acme Services GmbH" in audit_content
+    assert "match_score: 100" in audit_content
+    assert "status: approved" in audit_content
+    assert "flags: none" in audit_content
+    assert "human_review_required: false" in audit_content
 
     metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
 
@@ -710,6 +718,13 @@ def test_run_counterparty_agent_executes_full_flow(
     assert agent_c_metrics["evidence_index_available"] is True
 
     assert agent_c_metrics["evidence_item_count"] == 1
+
+    assert agent_c_metrics["counterparty_resolution"] == "completed"
+
+    assert agent_c_metrics["match_score"] == 100
+    assert agent_c_metrics["flags_count"] == 0
+
+    assert agent_c_metrics["human_review_required"] is False
 
 
 def test_run_counterparty_agent_allows_missing_evidence_index(
@@ -752,37 +767,57 @@ def test_run_counterparty_agent_fails_clearly_for_missing_input(
         exist_ok=True,
     )
 
+    # context_packet.json exists.
     write_json(
         run_dir / "context_packet.json",
         {"counterparty_name_from_manifest": ("Acme Services GmbH")},
     )
 
+    # vendor_master.csv exists.
     write_csv(
-        (run_dir / "input_snapshot" / "vendor_master.csv"),
+        run_dir / "input_snapshot" / "vendor_master.csv",
         (
-            "vendor_id,vendor_name,country,"
-            "status,risk_level\n"
-            "V001,Acme Services GmbH,Germany,"
-            "approved,low\n"
+            "vendor_id,vendor_name,country,status,risk_level\n"
+            "V001,Acme Services GmbH,Germany,approved,low\n"
         ),
     )
 
+    # extracted_contract.json is intentionally missing.
     with pytest.raises(
         CounterpartyInputError,
-        match=("extracted_contract.json " "was not found"),
+        match="extracted_contract.json was not found",
     ):
         run_counterparty_agent(run_dir)
 
+    # Verify the failure was written to audit_log.md.
     audit_content = (run_dir / "audit_log.md").read_text(encoding="utf-8")
 
+    assert "Agent C — Step 3: Counterparty Resolution" in audit_content
+    assert "counterparty_resolution: failed" in audit_content
     assert "status: failed" in audit_content
+    assert "human_review_required: true" in audit_content
+    assert "CounterpartyInputError" in audit_content
     assert "extracted_contract.json" in audit_content
 
+    # Verify the failure was written to metrics.json.
     metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
 
-    assert metrics["agents"]["agent_c"]["status"] == "failed"
+    agent_c_metrics = metrics["agents"]["agent_c"]
 
-    assert metrics["agents"]["agent_c"]["error_status"] == "CounterpartyInputError"
+    assert agent_c_metrics["status"] == "failed"
+
+    assert agent_c_metrics["counterparty_resolution"] == "failed"
+
+    assert agent_c_metrics["match_score"] is None
+    assert agent_c_metrics["flags_count"] == 0
+
+    assert agent_c_metrics["human_review_required"] is True
+
+    assert agent_c_metrics["error_status"] == "CounterpartyInputError"
+
+    assert "extracted_contract.json" in agent_c_metrics["error_message"]
+
+    assert metrics["status"] == "failed_at_agent_c"
 
 
 def test_counterparty_agent_main_runs_with_directory_path(
@@ -795,3 +830,44 @@ def test_counterparty_agent_main_runs_with_directory_path(
     assert exit_code == 0
 
     assert (run_dir / NORMALIZED_COUNTERPARTY_FILENAME).is_file()
+
+
+def test_audit_and_metrics_record_human_review_for_high_risk_vendor(
+    tmp_path: Path,
+) -> None:
+    """
+    High-risk counterparties must record that human review
+    is required in both audit_log.md and metrics.json.
+    """
+
+    run_dir = create_complete_agent_c_run(tmp_path)
+
+    # Replace the normal low-risk vendor with a high-risk vendor.
+    write_csv(
+        run_dir / "input_snapshot" / "vendor_master.csv",
+        (
+            "vendor_id,vendor_name,country,status,risk_level\n"
+            "V001,Acme Services GmbH,Germany,approved,high\n"
+        ),
+    )
+
+    result = run_counterparty_agent(run_dir)
+
+    assert result.status == "high_risk"
+
+    assert MANUAL_REVIEW_REQUIRED_FLAG in result.flags
+
+    audit_content = (run_dir / "audit_log.md").read_text(encoding="utf-8")
+
+    assert "status: high_risk" in audit_content
+    assert "flags: high_risk_counterparty, " "manual_review_required" in audit_content
+    assert "human_review_required: true" in audit_content
+
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+
+    agent_c_metrics = metrics["agents"]["agent_c"]
+
+    assert agent_c_metrics["counterparty_resolution"] == "completed"
+    assert agent_c_metrics["counterparty_status"] == "high_risk"
+    assert agent_c_metrics["flags_count"] == 2
+    assert agent_c_metrics["human_review_required"] is True

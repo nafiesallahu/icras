@@ -963,8 +963,10 @@ def _record_agent_c_failure(
         _append_audit_log(
             run_dir,
             [
-                "## Agent C — Counterparty Resolution",
+                "## Agent C — Step 3: Counterparty Resolution",
+                "- counterparty_resolution: failed",
                 "- status: failed",
+                "- human_review_required: true",
                 f"- error_type: {type(error).__name__}",
                 f"- error: {error}",
             ],
@@ -977,12 +979,32 @@ def _record_agent_c_failure(
             run_dir,
             {
                 "status": "failed",
+                "counterparty_resolution": "failed",
+                "match_score": None,
+                "flags_count": 0,
+                "human_review_required": True,
                 "error_status": type(error).__name__,
                 "error_message": str(error),
             },
         )
     except Exception:
         pass
+
+
+def _counterparty_requires_human_review(
+    result: NormalizedCounterparty,
+) -> bool:
+    """
+    Determine whether Agent C requires a human review.
+
+    Review is required when:
+    - manual_review_required exists in the flags; or
+    - any generated finding explicitly requires review.
+    """
+
+    return MANUAL_REVIEW_REQUIRED_FLAG in result.flags or any(
+        finding.requires_human_review for finding in result.findings
+    )
 
 
 def run_counterparty_agent(
@@ -1066,24 +1088,41 @@ def run_counterparty_agent(
 
         finding_types = [finding.finding_type for finding in validated_output.findings]
 
+        human_review_required = _counterparty_requires_human_review(validated_output)
+
+        flags_text = (
+            ", ".join(validated_output.flags) if validated_output.flags else "none"
+        )
+
+        matched_vendor_text = (
+            validated_output.matched_vendor_name
+            if validated_output.matched_vendor_name is not None
+            else "none"
+        )
+
         # 10. Update audit_log.md.
         _append_audit_log(
             resolved_run_dir,
             [
-                "## Agent C — Counterparty Resolution",
-                "- status: completed",
-                ("- manifest_counterparty: " f"{manifest_counterparty_name}"),
-                ("- extracted_counterparty: " f"{extracted_counterparty_name}"),
+                "## Agent C — Step 3: Counterparty Resolution",
+                "- counterparty_resolution: completed",
+                ("- input_name: " f"{validated_output.input_counterparty_name}"),
+                ("- manifest_name: " f"{manifest_counterparty_name}"),
+                ("- extracted_name: " f"{extracted_counterparty_name}"),
                 ("- manifest_extracted_similarity: " f"{comparison.similarity_score}"),
                 ("- material_mismatch: " f"{comparison.is_mismatch}"),
                 ("- matched_vendor_id: " f"{validated_output.matched_vendor_id}"),
-                ("- matched_vendor_name: " f"{validated_output.matched_vendor_name}"),
-                ("- vendor_match_score: " f"{validated_output.match_score}"),
-                ("- counterparty_status: " f"{validated_output.status}"),
+                ("- matched_vendor: " f"{matched_vendor_text}"),
+                ("- match_score: " f"{validated_output.match_score}"),
+                ("- status: " f"{validated_output.status}"),
                 ("- risk_level: " f"{validated_output.risk_level}"),
-                f"- flags: {validated_output.flags}",
+                f"- flags: {flags_text}",
                 f"- findings: {finding_types}",
-                ("- evidence_index_available: " f"{evidence_index is not None}"),
+                ("- human_review_required: " f"{str(human_review_required).lower()}"),
+                (
+                    "- evidence_index_available: "
+                    f"{str(evidence_index is not None).lower()}"
+                ),
                 ("- output: " f"{NORMALIZED_COUNTERPARTY_FILENAME}"),
             ],
         )
@@ -1092,15 +1131,25 @@ def run_counterparty_agent(
         _update_agent_c_metrics(
             resolved_run_dir,
             {
+                # Agent execution status.
                 "status": "completed",
+                # Exact DZ-01.9 completion field.
+                "counterparty_resolution": "completed",
+                # Final business classification.
                 "counterparty_status": (validated_output.status),
                 "risk_level": (validated_output.risk_level),
+                # Matching metrics.
                 "match_score": (validated_output.match_score),
-                "flag_count": len(validated_output.flags),
+                # Use the plural name requested by DZ-01.9.
+                "flags_count": len(validated_output.flags),
                 "finding_count": len(validated_output.findings),
+                # Workflow information.
+                "human_review_required": (human_review_required),
                 "material_mismatch": (comparison.is_mismatch),
+                # Evidence information.
                 "evidence_index_available": (evidence_index is not None),
                 "evidence_item_count": (evidence_item_count),
+                # Generated artifact.
                 "output_file": (NORMALIZED_COUNTERPARTY_FILENAME),
             },
         )

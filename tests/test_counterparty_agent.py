@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import pytest
 
 from app.agents.counterparty_agent import (
     COUNTERPARTY_NOT_FOUND_FLAG,
@@ -14,6 +15,9 @@ from app.agents.counterparty_agent import (
     read_counterparty_names,
     NORMALIZED_COUNTERPARTY_FILENAME,
     write_normalized_counterparty,
+    CounterpartyInputError,
+    main,
+    run_counterparty_agent,
 )
 from app.schemas.finding import (
     FindingRiskLevel,
@@ -48,6 +52,89 @@ def write_json(
         ),
         encoding="utf-8",
     )
+
+
+def write_csv(
+    path: Path,
+    content: str,
+) -> None:
+    """
+    Write a temporary vendor-master CSV for Agent C tests.
+    """
+
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    path.write_text(
+        content,
+        encoding="utf-8",
+    )
+
+
+def create_complete_agent_c_run(
+    tmp_path: Path,
+    *,
+    include_evidence_index: bool = True,
+) -> Path:
+    """
+    Create a complete temporary run directory for Agent C.
+    """
+
+    run_dir = tmp_path / "runs" / "run_001"
+
+    write_json(
+        run_dir / "context_packet.json",
+        {
+            "run_id": "run_001",
+            "counterparty_name_from_manifest": ("Acme Services GmbH"),
+        },
+    )
+
+    write_json(
+        run_dir / "extracted_contract.json",
+        {"parties": {"counterparty_name": ("Acme Services Gmbh")}},
+    )
+
+    write_csv(
+        (run_dir / "input_snapshot" / "vendor_master.csv"),
+        (
+            "vendor_id,vendor_name,country,"
+            "status,risk_level\n"
+            "V001,Acme Services GmbH,Germany,"
+            "approved,low\n"
+        ),
+    )
+
+    if include_evidence_index:
+        write_json(
+            run_dir / "evidence_index.json",
+            {
+                "documents": [],
+                "evidence_items": [
+                    {
+                        "evidence_id": "EV-001",
+                        "text_excerpt": ("Acme Services GmbH"),
+                    }
+                ],
+            },
+        )
+
+    write_json(
+        run_dir / "metrics.json",
+        {
+            "run_id": "run_001",
+            "agents": {"agent_a": {"status": "completed"}},
+        },
+    )
+
+    (run_dir / "audit_log.md").write_text(
+        "# ICRAS Audit Log\n",
+        encoding="utf-8",
+    )
+
+    return run_dir
 
 
 def create_match_result(
@@ -567,3 +654,144 @@ def test_findings_are_written_to_normalized_counterparty_json(
     assert finding_data["source_agent"] == "agent_c"
     assert finding_data["category"] == "counterparty"
     assert finding_data["requires_human_review"] is True
+
+
+def test_run_counterparty_agent_executes_full_flow(
+    tmp_path: Path,
+) -> None:
+    """
+    Agent C must read all inputs, resolve the counterparty,
+    write its output, and update audit and metrics files.
+    """
+
+    run_dir = create_complete_agent_c_run(tmp_path)
+
+    result = run_counterparty_agent(run_dir)
+
+    assert isinstance(
+        result,
+        NormalizedCounterparty,
+    )
+
+    assert result.status == "approved"
+    assert result.matched_vendor_id == "V001"
+    assert result.matched_vendor_name == ("Acme Services GmbH")
+    assert result.match_score == 100
+
+    output_path = run_dir / "normalized_counterparty.json"
+
+    assert output_path.is_file()
+
+    # Validate the exact JSON written to disk.
+    written_result = NormalizedCounterparty.model_validate_json(
+        output_path.read_text(encoding="utf-8")
+    )
+
+    assert written_result == result
+
+    audit_content = (run_dir / "audit_log.md").read_text(encoding="utf-8")
+
+    assert "Agent C — Counterparty Resolution" in audit_content
+    assert "status: completed" in audit_content
+    assert "V001" in audit_content
+    assert "approved" in audit_content
+
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+
+    # Existing Agent A metrics must remain.
+    assert metrics["agents"]["agent_a"]["status"] == "completed"
+
+    agent_c_metrics = metrics["agents"]["agent_c"]
+
+    assert agent_c_metrics["status"] == "completed"
+
+    assert agent_c_metrics["counterparty_status"] == "approved"
+
+    assert agent_c_metrics["evidence_index_available"] is True
+
+    assert agent_c_metrics["evidence_item_count"] == 1
+
+
+def test_run_counterparty_agent_allows_missing_evidence_index(
+    tmp_path: Path,
+) -> None:
+    """
+    Agent C must continue when evidence_index.json is absent.
+    """
+
+    run_dir = create_complete_agent_c_run(
+        tmp_path,
+        include_evidence_index=False,
+    )
+
+    result = run_counterparty_agent(run_dir)
+
+    assert result.status == "approved"
+
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+
+    agent_c_metrics = metrics["agents"]["agent_c"]
+
+    assert agent_c_metrics["evidence_index_available"] is False
+
+    assert agent_c_metrics["evidence_item_count"] == 0
+
+
+def test_run_counterparty_agent_fails_clearly_for_missing_input(
+    tmp_path: Path,
+) -> None:
+    """
+    Missing extracted_contract.json must cause a clear failure
+    and update audit_log.md and metrics.json.
+    """
+
+    run_dir = tmp_path / "runs" / "run_missing_input"
+
+    run_dir.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    write_json(
+        run_dir / "context_packet.json",
+        {"counterparty_name_from_manifest": ("Acme Services GmbH")},
+    )
+
+    write_csv(
+        (run_dir / "input_snapshot" / "vendor_master.csv"),
+        (
+            "vendor_id,vendor_name,country,"
+            "status,risk_level\n"
+            "V001,Acme Services GmbH,Germany,"
+            "approved,low\n"
+        ),
+    )
+
+    with pytest.raises(
+        CounterpartyInputError,
+        match=("extracted_contract.json " "was not found"),
+    ):
+        run_counterparty_agent(run_dir)
+
+    audit_content = (run_dir / "audit_log.md").read_text(encoding="utf-8")
+
+    assert "status: failed" in audit_content
+    assert "extracted_contract.json" in audit_content
+
+    metrics = json.loads((run_dir / "metrics.json").read_text(encoding="utf-8"))
+
+    assert metrics["agents"]["agent_c"]["status"] == "failed"
+
+    assert metrics["agents"]["agent_c"]["error_status"] == "CounterpartyInputError"
+
+
+def test_counterparty_agent_main_runs_with_directory_path(
+    tmp_path: Path,
+) -> None:
+    run_dir = create_complete_agent_c_run(tmp_path)
+
+    exit_code = main([str(run_dir)])
+
+    assert exit_code == 0
+
+    assert (run_dir / NORMALIZED_COUNTERPARTY_FILENAME).is_file()

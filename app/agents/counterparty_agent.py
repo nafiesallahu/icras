@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import argparse
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -20,7 +22,10 @@ from app.schemas.normalized_counterparty import NormalizedCounterparty
 # FuzzyMatchResult contains the vendor match and score produced
 # by the RapidFuzz service.
 from app.services.fuzzy_matcher import (
+    DEFAULT_MATCH_THRESHOLD,
     FuzzyMatchResult,
+    find_best_vendor_match,
+    load_vendor_master_for_run,
     normalize_company_name,
 )
 
@@ -82,7 +87,10 @@ MEDIUM_COUNTERPARTY_MISMATCH_SCORE = 60
 # These are the exact JSON locations Agent C must read.
 CONTEXT_PACKET_FILENAME = "context_packet.json"
 EXTRACTED_CONTRACT_FILENAME = "extracted_contract.json"
+EVIDENCE_INDEX_FILENAME = "evidence_index.json"
 NORMALIZED_COUNTERPARTY_FILENAME = "normalized_counterparty.json"
+AUDIT_LOG_FILENAME = "audit_log.md"
+METRICS_FILENAME = "metrics.json"
 
 MANIFEST_COUNTERPARTY_FIELD = "counterparty_name_from_manifest"
 EXTRACTED_PARTIES_FIELD = "parties"
@@ -211,6 +219,39 @@ def _load_json_object(
         raise CounterpartyInputError(f"{file_description} must contain a JSON object.")
 
     return data
+
+
+def _read_optional_evidence_index(
+    run_dir: Path,
+) -> dict[str, Any] | None:
+    """
+    Read evidence_index.json when available.
+
+    Missing evidence_index.json is allowed.
+    An existing but invalid file causes a clear failure.
+    """
+
+    evidence_path = run_dir / EVIDENCE_INDEX_FILENAME
+
+    if not evidence_path.exists():
+        return None
+
+    evidence_index = _load_json_object(
+        evidence_path,
+        file_description=EVIDENCE_INDEX_FILENAME,
+    )
+
+    evidence_items = evidence_index.get(
+        "evidence_items",
+        [],
+    )
+
+    if not isinstance(evidence_items, list):
+        raise CounterpartyInputError(
+            "evidence_index.json field 'evidence_items' " "must contain a JSON array."
+        )
+
+    return evidence_index
 
 
 def _require_non_empty_name(
@@ -814,3 +855,324 @@ def write_normalized_counterparty(
     )
 
     return output_path
+
+
+def _write_json_object(
+    output_path: Path,
+    payload: dict[str, Any],
+) -> None:
+    """
+    Write a deterministic JSON object.
+    """
+
+    output_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    output_path.write_text(
+        json.dumps(
+            payload,
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+
+def _append_audit_log(
+    run_dir: Path,
+    lines: Sequence[str],
+) -> Path:
+    """
+    Append Agent C details without removing earlier audit entries.
+    """
+
+    audit_path = run_dir / AUDIT_LOG_FILENAME
+
+    audit_path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    separator = ""
+
+    if audit_path.exists() and audit_path.stat().st_size > 0:
+        separator = "\n"
+
+    with audit_path.open(
+        "a",
+        encoding="utf-8",
+    ) as audit_file:
+        audit_file.write(separator + "\n".join(lines) + "\n")
+
+    return audit_path
+
+
+def _update_agent_c_metrics(
+    run_dir: Path,
+    agent_metrics: dict[str, Any],
+) -> Path:
+    """
+    Update only Agent C's metrics while preserving other agents.
+    """
+
+    metrics_path = run_dir / METRICS_FILENAME
+
+    if metrics_path.exists():
+        metrics = _load_json_object(
+            metrics_path,
+            file_description=METRICS_FILENAME,
+        )
+    else:
+        metrics = {}
+
+    existing_agents = metrics.get("agents", {})
+
+    if not isinstance(existing_agents, dict):
+        raise CounterpartyInputError(
+            "metrics.json field 'agents' " "must contain a JSON object."
+        )
+
+    agents = dict(existing_agents)
+    agents["agent_c"] = agent_metrics
+    metrics["agents"] = agents
+
+    if agent_metrics.get("status") == "failed":
+        metrics["status"] = "failed_at_agent_c"
+
+    _write_json_object(
+        metrics_path,
+        metrics,
+    )
+
+    return metrics_path
+
+
+def _record_agent_c_failure(
+    run_dir: Path,
+    error: Exception,
+) -> None:
+    """
+    Record an Agent C failure while preserving the original error.
+    """
+
+    try:
+        _append_audit_log(
+            run_dir,
+            [
+                "## Agent C — Counterparty Resolution",
+                "- status: failed",
+                f"- error_type: {type(error).__name__}",
+                f"- error: {error}",
+            ],
+        )
+    except Exception:
+        pass
+
+    try:
+        _update_agent_c_metrics(
+            run_dir,
+            {
+                "status": "failed",
+                "error_status": type(error).__name__,
+                "error_message": str(error),
+            },
+        )
+    except Exception:
+        pass
+
+
+def run_counterparty_agent(
+    run_dir: str | Path,
+    *,
+    vendor_policy_path: str | Path | None = None,
+    match_threshold: int = DEFAULT_MATCH_THRESHOLD,
+    mismatch_threshold: int = (DEFAULT_COUNTERPARTY_MISMATCH_THRESHOLD),
+    mismatch_severity: Severity = Severity.HIGH,
+) -> NormalizedCounterparty:
+    """
+    Execute the complete Agent C flow for one run directory.
+    """
+
+    resolved_run_dir = Path(run_dir)
+
+    if not resolved_run_dir.is_dir():
+        raise CounterpartyInputError(
+            "Agent C run directory was not found at: " f"{resolved_run_dir}"
+        )
+
+    try:
+        # 1–2. Read both counterparty names.
+        (
+            manifest_counterparty_name,
+            extracted_counterparty_name,
+        ) = read_counterparty_names(resolved_run_dir)
+
+        # 3. Load the run snapshot vendor master, with optional fallback.
+        vendors = load_vendor_master_for_run(
+            resolved_run_dir,
+            policy_path=vendor_policy_path,
+        )
+
+        # 4. Read optional evidence.
+        evidence_index = _read_optional_evidence_index(resolved_run_dir)
+
+        evidence_item_count = 0
+
+        if evidence_index is not None:
+            evidence_item_count = len(evidence_index.get("evidence_items", []))
+
+        # 5. Compare manifest and extracted names.
+        comparison = compare_counterparty_names(
+            manifest_counterparty_name,
+            extracted_counterparty_name,
+            mismatch_threshold=mismatch_threshold,
+            mismatch_severity=mismatch_severity,
+        )
+
+        existing_findings: list[UnifiedFinding] = []
+
+        if comparison.finding is not None:
+            existing_findings.append(comparison.finding)
+
+        # 6. Fuzzy match the extracted contract name.
+        match_result = find_best_vendor_match(
+            extracted_counterparty_name,
+            vendors,
+            threshold=match_threshold,
+        )
+
+        # 7–8. Classify and generate flags/findings.
+        normalized_counterparty = classify_counterparty_status(
+            match_result,
+            manifest_counterparty_name=(manifest_counterparty_name),
+            extracted_counterparty_name=(extracted_counterparty_name),
+            findings=existing_findings,
+        )
+
+        # 9. Write normalized_counterparty.json.
+        output_path = write_normalized_counterparty(
+            resolved_run_dir,
+            normalized_counterparty,
+        )
+
+        # Validate the exact JSON written to disk.
+        validated_output = NormalizedCounterparty.model_validate_json(
+            output_path.read_text(encoding="utf-8")
+        )
+
+        finding_types = [finding.finding_type for finding in validated_output.findings]
+
+        # 10. Update audit_log.md.
+        _append_audit_log(
+            resolved_run_dir,
+            [
+                "## Agent C — Counterparty Resolution",
+                "- status: completed",
+                ("- manifest_counterparty: " f"{manifest_counterparty_name}"),
+                ("- extracted_counterparty: " f"{extracted_counterparty_name}"),
+                ("- manifest_extracted_similarity: " f"{comparison.similarity_score}"),
+                ("- material_mismatch: " f"{comparison.is_mismatch}"),
+                ("- matched_vendor_id: " f"{validated_output.matched_vendor_id}"),
+                ("- matched_vendor_name: " f"{validated_output.matched_vendor_name}"),
+                ("- vendor_match_score: " f"{validated_output.match_score}"),
+                ("- counterparty_status: " f"{validated_output.status}"),
+                ("- risk_level: " f"{validated_output.risk_level}"),
+                f"- flags: {validated_output.flags}",
+                f"- findings: {finding_types}",
+                ("- evidence_index_available: " f"{evidence_index is not None}"),
+                ("- output: " f"{NORMALIZED_COUNTERPARTY_FILENAME}"),
+            ],
+        )
+
+        # 11. Update metrics.json.
+        _update_agent_c_metrics(
+            resolved_run_dir,
+            {
+                "status": "completed",
+                "counterparty_status": (validated_output.status),
+                "risk_level": (validated_output.risk_level),
+                "match_score": (validated_output.match_score),
+                "flag_count": len(validated_output.flags),
+                "finding_count": len(validated_output.findings),
+                "material_mismatch": (comparison.is_mismatch),
+                "evidence_index_available": (evidence_index is not None),
+                "evidence_item_count": (evidence_item_count),
+                "output_file": (NORMALIZED_COUNTERPARTY_FILENAME),
+            },
+        )
+
+        return validated_output
+
+    except Exception as exc:
+        _record_agent_c_failure(
+            resolved_run_dir,
+            exc,
+        )
+        raise
+
+
+def main(
+    argv: Sequence[str] | None = None,
+) -> int:
+    """
+    Run Agent C independently from a terminal.
+    """
+
+    parser = argparse.ArgumentParser(
+        description=("Run Agent C counterparty resolution.")
+    )
+
+    parser.add_argument(
+        "run_dir",
+        help="Path to the ICRAS run directory.",
+    )
+
+    parser.add_argument(
+        "--vendor-policy-path",
+        default=None,
+        help="Optional fallback vendor_master.csv path.",
+    )
+
+    parser.add_argument(
+        "--match-threshold",
+        type=int,
+        default=DEFAULT_MATCH_THRESHOLD,
+    )
+
+    parser.add_argument(
+        "--mismatch-threshold",
+        type=int,
+        default=(DEFAULT_COUNTERPARTY_MISMATCH_THRESHOLD),
+    )
+
+    args = parser.parse_args(list(argv) if argv is not None else None)
+
+    try:
+        result = run_counterparty_agent(
+            args.run_dir,
+            vendor_policy_path=args.vendor_policy_path,
+            match_threshold=args.match_threshold,
+            mismatch_threshold=args.mismatch_threshold,
+        )
+    except Exception as exc:
+        print(
+            f"Agent C failed: {exc}",
+            file=sys.stderr,
+        )
+        return 1
+
+    print(
+        "Agent C completed: "
+        f"status={result.status}, "
+        f"match_score={result.match_score}"
+    )
+
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

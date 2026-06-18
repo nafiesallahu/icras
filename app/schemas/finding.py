@@ -1,7 +1,7 @@
 from enum import Enum
 from typing import Annotated
 
-from pydantic import Field, StrictBool, StrictInt, StrictStr
+from pydantic import Field, StrictBool, StrictFloat, StrictInt, StrictStr
 
 from app.schemas.extracted_contract import BoundingBox, StrictSchemaModel
 
@@ -69,6 +69,23 @@ class UnifiedFinding(StrictSchemaModel):
         StrictInt,
         Field(ge=0, le=100),
     ] = 0
+
+    confidence: (
+        Annotated[
+            StrictFloat,
+            Field(ge=0.0, le=1.0),
+        ]
+        | None
+    ) = None
+
+    clause_type: StrictStr | None = Field(
+        default=None,
+        min_length=1,
+    )
+
+    open_questions: list[StrictStr] = Field(
+        default_factory=list,
+    )
 
     # Machine-readable finding type.
     #

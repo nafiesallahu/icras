@@ -203,6 +203,23 @@ def validate_bundle(bundle_path: str | Path) -> list[str]:
 # ----------------------------------------------------------------------------
 # Agent D / E run-directory wrappers
 # ----------------------------------------------------------------------------
+def _read_contract_type(run_dir: Path) -> str | None:
+    """Best-effort read of ``contract_type`` from the run's context packet."""
+    context_path = run_dir / "context_packet.json"
+    if not context_path.is_file():
+        return None
+    try:
+        data = json.loads(context_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    contract_type = data.get("contract_type")
+    if isinstance(contract_type, str) and contract_type.strip():
+        return contract_type
+    return None
+
+
 def run_validation_agent(run_directory: str | Path) -> ValidationResult:
     """Agent D wrapper: validate the extracted contract and persist the result."""
     run_dir = Path(run_directory)
@@ -210,6 +227,12 @@ def run_validation_agent(run_directory: str | Path) -> ValidationResult:
     contract = ExtractedContract.from_json_file(
         run_dir / EXTRACTED_CONTRACT_FILENAME
     )
+
+    # Surface the contract type recorded at intake so Agent D can apply
+    # contract-type-aware mandatory-field rules (e.g. NDAs do not require
+    # payment terms or a liability cap). Falls back to clause-based inference
+    # inside the agent when the hint is unavailable.
+    contract_type = _read_contract_type(run_dir)
 
     agent = ValidationAgent()
     # Pin the run-snapshot playbook so validation uses the exact policy captured
@@ -221,7 +244,7 @@ def run_validation_agent(run_directory: str | Path) -> ValidationResult:
         except Exception:  # noqa: BLE001 - keep default playbook on any issue
             pass
 
-    result = agent.validate(contract)
+    result = agent.validate(contract, contract_type=contract_type)
     result.to_json_file(run_dir / VALIDATION_RESULT_FILENAME)
 
     _append_audit(

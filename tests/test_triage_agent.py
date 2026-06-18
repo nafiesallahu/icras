@@ -541,7 +541,9 @@ def test_low_risk_findings_still_auto_approve(tmp_path: Path) -> None:
     assert result["final_decision"] == "auto_approve"
 
 
-def test_critical_finding_routes_to_reject_or_block(tmp_path: Path) -> None:
+def test_single_critical_finding_routes_by_category(tmp_path: Path) -> None:
+    # A single critical finding must NOT collapse into reject_or_block; it is
+    # routed to the review queue implied by its business category.
     run_dir = _seed(
         tmp_path / "run",
         clause_analysis=_clause_analysis(
@@ -550,10 +552,54 @@ def test_critical_finding_routes_to_reject_or_block(tmp_path: Path) -> None:
         ),
     )
     result = run_triage_agent(run_dir)
+    assert result["final_decision"] == "legal_review_required"
+    payload = json.loads((run_dir / "posting_payload.json").read_text())
+    assert payload["status"] == "pending_review"
+
+
+def test_multiple_critical_findings_route_to_reject_or_block(tmp_path: Path) -> None:
+    # Multiple independent critical-tier risks constitute a blocking situation.
+    run_dir = _seed(
+        tmp_path / "run",
+        clause_analysis=_clause_analysis(
+            [
+                _scored_finding("RISK-1", category="legal", risk_tier="critical", score=90, policy_rule="x"),
+                _scored_finding("RISK-2", category="compliance", risk_tier="critical", score=95, policy_rule="y"),
+            ],
+            "critical",
+        ),
+    )
+    result = run_triage_agent(run_dir)
     assert result["final_decision"] == "reject_or_block"
     assert "executive_committee" in result["approvers"]
     payload = json.loads((run_dir / "posting_payload.json").read_text())
     assert payload["status"] == "blocked"
+
+
+def test_explicit_hard_block_signal_routes_to_reject_or_block(tmp_path: Path) -> None:
+    # An explicit policy block/reject signal forces a rejection on its own.
+    run_dir = _seed(
+        tmp_path / "run",
+        normalized_counterparty={
+            "status": "high_risk",
+            "risk_level": "high",
+            "findings": [
+                {
+                    "finding_id": "CP-001",
+                    "source_agent": "agent_c",
+                    "category": "counterparty",
+                    "severity": "high",
+                    "risk_level": "high",
+                    "score": 80,
+                    "finding_type": "sanctioned_blocked_counterparty",
+                    "recommendation": "Block the counterparty.",
+                }
+            ],
+        },
+        clause_analysis=_clause_analysis([], "high"),
+    )
+    result = run_triage_agent(run_dir)
+    assert result["final_decision"] == "reject_or_block"
 
 
 def test_medium_risk_routes_to_manual_review(tmp_path: Path) -> None:

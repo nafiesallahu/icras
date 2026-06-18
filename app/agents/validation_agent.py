@@ -15,9 +15,95 @@ from app.schemas.validation_result import (
 from app.services.policy_loader import load_playbook
 
 
+# Substrings that identify an NDA / confidentiality-style agreement. These are
+# matched against the contract_type hint coming from intake (the manifest) so
+# free-form values such as ``"mutual_nda"`` or
+# ``"non_disclosure_agreement"`` all resolve correctly.
+_NDA_TYPE_KEYWORDS = (
+    "nda",
+    "non_disclosure",
+    "non-disclosure",
+    "confidential",
+)
+
+
 class ValidationAgent:
     def __init__(self):
         self.playbook = load_playbook()
+
+    # ------------------------------------------------------------------
+    # Contract-type awareness
+    #
+    # Mandatory-field validation must not be blind to the kind of agreement
+    # being reviewed. A non-disclosure / confidentiality agreement legitimately
+    # has no payment terms, may omit an effective date, and does not require a
+    # commercial liability cap, whereas a services / commercial / MSA / SOW /
+    # procurement contract does. These helpers resolve the contract type from
+    # the intake hint when available, otherwise infer it from the extracted
+    # clauses, and gate the relevant rules accordingly.
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _is_nda_type(contract_type: str) -> bool:
+        normalized = (contract_type or "").strip().lower()
+        if not normalized:
+            return False
+        return any(keyword in normalized for keyword in _NDA_TYPE_KEYWORDS)
+
+    def _resolve_contract_type(
+        self,
+        contract: ExtractedContract,
+        contract_type: str | None,
+    ) -> str:
+        """Resolve a contract type string from the intake hint or clauses.
+
+        When the intake/context hint is provided it is trusted. Otherwise the
+        type is inferred from the extracted contract: an agreement that has a
+        confidentiality clause but no payment-terms clause is treated as an
+        NDA/confidentiality agreement; anything else defaults to a generic
+        commercial/services agreement so the standard mandatory-field checks
+        still apply.
+        """
+        hint = (contract_type or "").strip().lower()
+        if hint:
+            return hint
+
+        has_confidentiality = self._has_clause(
+            contract, ClauseType.CONFIDENTIALITY
+        )
+        has_payment_terms = (
+            self._get_clause_by_type(contract, ClauseType.PAYMENT_TERMS)
+            is not None
+        )
+        if has_confidentiality and not has_payment_terms:
+            return "nda"
+        return "services_agreement"
+
+    def _is_payment_terms_required(self, contract_type: str) -> bool:
+        """Payment terms are required for commercial/services-style contracts.
+
+        NDA / confidentiality agreements have no commercial payment obligation,
+        so a missing payment-terms clause must not be flagged for them.
+        """
+        return not self._is_nda_type(contract_type)
+
+    def _is_effective_date_required(self, contract_type: str) -> bool:
+        """Effective date is required for commercial/services-style contracts.
+
+        NDA / confidentiality agreements must not be escalated to HIGH risk
+        solely because an effective date is missing, unless the policy
+        explicitly requires it (no such explicit policy exists today).
+        """
+        return not self._is_nda_type(contract_type)
+
+    def _is_liability_cap_required(self, contract_type: str) -> bool:
+        """Liability cap requirement follows the playbook for commercial types.
+
+        NDA / confidentiality agreements do not carry the commercial liability
+        exposure a cap protects against, so the cap is not mandatory for them.
+        """
+        if self._is_nda_type(contract_type):
+            return False
+        return self.playbook.liability_cap.required
 
     def _get_clause_by_type(
         self,
@@ -214,8 +300,9 @@ class ValidationAgent:
     def _check_liability_cap_rule(
         self,
         liability_cap_present: bool | None,
+        liability_cap_required: bool,
     ) -> ValidationFinding | None:
-        if self.playbook.liability_cap.required is False:
+        if liability_cap_required is False:
             return None
 
         if liability_cap_present is True:
@@ -384,7 +471,11 @@ class ValidationAgent:
     def _check_missing_effective_date_rule(
         self,
         effective_date: str | None,
+        effective_date_required: bool,
     ) -> ValidationFinding | None:
+        if effective_date_required is False:
+            return None
+
         if effective_date is not None:
             return None
 
@@ -441,7 +532,11 @@ class ValidationAgent:
     def _check_missing_payment_terms_rule(
         self,
         payment_terms_days: int | None,
+        payment_terms_required: bool,
     ) -> ValidationFinding | None:
+        if payment_terms_required is False:
+            return None
+
         if payment_terms_days is not None:
             return None
 
@@ -458,8 +553,25 @@ class ValidationAgent:
         )
 
 
-    def validate(self, contract: ExtractedContract) -> ValidationResult:
+    def validate(
+        self,
+        contract: ExtractedContract,
+        contract_type: str | None = None,
+    ) -> ValidationResult:
         contains_personal_data = self._contains_personal_data(contract)
+
+        resolved_contract_type = self._resolve_contract_type(
+            contract, contract_type
+        )
+        payment_terms_required = self._is_payment_terms_required(
+            resolved_contract_type
+        )
+        effective_date_required = self._is_effective_date_required(
+            resolved_contract_type
+        )
+        liability_cap_required = self._is_liability_cap_required(
+            resolved_contract_type
+        )
 
         normalized_fields = NormalizedFields(
             payment_terms_days=self._get_payment_terms_days(contract),
@@ -485,6 +597,7 @@ class ValidationAgent:
 
         liability_cap_finding = self._check_liability_cap_rule(
             normalized_fields.liability_cap_present,
+            liability_cap_required,
         )
 
         if liability_cap_finding is not None:
@@ -524,6 +637,7 @@ class ValidationAgent:
 
         effective_date_finding = self._check_missing_effective_date_rule(
             normalized_fields.effective_date,
+            effective_date_required,
         )
 
         if effective_date_finding is not None:
@@ -545,6 +659,7 @@ class ValidationAgent:
 
         payment_terms_missing_finding = self._check_missing_payment_terms_rule(
             normalized_fields.payment_terms_days,
+            payment_terms_required,
         )
 
         if payment_terms_missing_finding is not None:

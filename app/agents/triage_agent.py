@@ -155,6 +155,23 @@ SOURCE_RANK: dict[str, int] = {"agent_e": 3, "agent_d": 2, "agent_c": 1}
 # Finding types / flags that force a blocking (reject_or_block) decision.
 BLOCKING_SIGNALS = {"reject", "block", "blocking", "prohibited", "reject_or_block"}
 
+# Number of independent critical-tier risks that, together, constitute a
+# "multiple high risks" situation severe enough to reject/block outright.
+MULTIPLE_CRITICAL_BLOCK_THRESHOLD = 2
+
+# Risk categories whose simultaneous presence (a sanctioned/high-risk
+# jurisdiction together with missing GDPR and missing liability protections)
+# constitutes an explicit blocking combination regardless of tier arithmetic.
+_SANCTIONED_JURISDICTION_RULES = {
+    "jurisdiction_rules.high_risk_jurisdiction",
+}
+_MISSING_GDPR_RULES = {
+    "gdpr.data_processing_clause_required_if.contains_personal_data",
+}
+_MISSING_LIABILITY_RULES = {
+    "liability_cap.required",
+}
+
 
 class AgentHError(Exception):
     """Raised when Agent H cannot run because a required input is invalid.
@@ -274,8 +291,25 @@ def _normalize_evidence_refs(*values: Any) -> list[str]:
 
 
 def _is_blocking(severity: str, risk_tier: str, finding_type: str | None) -> bool:
+    """Whether a finding is severe enough to sort to the top of the queue.
+
+    This drives *prioritization ordering only* (critical risks surface first).
+    It is intentionally distinct from :func:`_is_hard_block`, which is the only
+    per-finding signal that forces a ``reject_or_block`` decision. A critical
+    tier no longer collapses the final decision into a rejection by itself.
+    """
     if severity == "critical" or risk_tier == "critical":
         return True
+    return _is_hard_block(finding_type)
+
+
+def _is_hard_block(finding_type: str | None) -> bool:
+    """Whether a finding explicitly demands a block/reject.
+
+    Only an explicit blocking signal in the finding type (for example a policy
+    action of ``reject`` / ``block`` / ``prohibited``) forces a rejection on its
+    own. Tier/severity alone never does.
+    """
     ftype = (finding_type or "").strip().lower()
     return any(signal in ftype for signal in BLOCKING_SIGNALS)
 
@@ -310,6 +344,7 @@ def _normalize_agent_e(clause_analysis: dict[str, Any] | None) -> list[dict[str,
                 "message": _clean_str(raw.get("recommendation")),
                 "requires_human_review": True,
                 "blocking": _is_blocking(risk_tier, risk_tier, finding_type),
+                "hard_block": _is_hard_block(finding_type),
             }
         )
     return findings
@@ -347,6 +382,7 @@ def _normalize_agent_d(validation_result: dict[str, Any] | None) -> list[dict[st
                 "message": message,
                 "requires_human_review": severity in ("high", "critical"),
                 "blocking": _is_blocking(severity, severity, None),
+                "hard_block": _is_hard_block(None),
             }
         )
     return findings
@@ -391,6 +427,7 @@ def _normalize_agent_c(
                 "message": _clean_str(raw.get("message")) or _clean_str(raw.get("recommendation")),
                 "requires_human_review": bool(raw.get("requires_human_review", False)),
                 "blocking": _is_blocking(severity, risk_tier, finding_type),
+                "hard_block": _is_hard_block(finding_type),
             }
         )
 
@@ -426,6 +463,7 @@ def _normalize_agent_c(
                     "message": f"Counterparty resolution status: {status or 'unresolved'}.",
                     "requires_human_review": True,
                     "blocking": False,
+                    "hard_block": False,
                 }
             )
     return findings
@@ -546,13 +584,77 @@ def _decision_priority(approval_policy: dict[str, Any] | None) -> dict[str, int]
 
 
 def _decision_for_finding(finding: dict[str, Any]) -> str | None:
-    """Map a single high/critical finding to the review decision it triggers."""
-    if finding.get("blocking"):
+    """Map a single high/critical finding to the review decision it triggers.
+
+    Routing is by business category, not by severity tier. A critical tier no
+    longer collapses to ``reject_or_block`` on its own — only an explicit
+    hard-block signal does. ``reject_or_block`` for combinations of independent
+    risks is decided separately in :func:`_select_decision`.
+    """
+    if finding.get("hard_block"):
         return DECISION_REJECT_OR_BLOCK
     if finding.get("risk_tier") not in ("high", "critical"):
         return None
     category = (finding.get("category") or "").lower()
     return CATEGORY_TO_DECISION.get(category, DECISION_MANUAL)
+
+
+def _blocking_finding_ids(findings: list[dict[str, Any]]) -> list[str]:
+    """Finding ids that contribute to a reject/block decision (sorted)."""
+    ids = [
+        str(f.get("finding_id", ""))
+        for f in findings
+        if f.get("hard_block") or f.get("risk_tier") == "critical"
+    ]
+    return sorted(ids)
+
+
+def _has_sanctioned_combination(findings: list[dict[str, Any]]) -> bool:
+    """Detect a sanctioned/high-risk jurisdiction + missing GDPR + missing cap.
+
+    Such a combination is an explicit blocking situation independent of the
+    tier arithmetic.
+    """
+    rules = {
+        (f.get("policy_rule") or "").strip()
+        for f in findings
+        if f.get("risk_tier") in ("high", "critical")
+    }
+    fields = {
+        (f.get("field") or "").strip().lower()
+        for f in findings
+        if f.get("risk_tier") in ("high", "critical")
+    }
+    has_sanctioned_jurisdiction = bool(rules & _SANCTIONED_JURISDICTION_RULES)
+    has_missing_gdpr = bool(rules & _MISSING_GDPR_RULES) or (
+        "gdpr_clause_present" in fields
+    )
+    has_missing_liability = bool(rules & _MISSING_LIABILITY_RULES) or (
+        "liability_cap_present" in fields
+    )
+    return has_sanctioned_jurisdiction and has_missing_gdpr and has_missing_liability
+
+
+def _should_block(findings: list[dict[str, Any]]) -> bool:
+    """Decide whether the contract must be rejected/blocked outright.
+
+    A rejection is reserved for explicit blocking combinations:
+
+    * any finding carries an explicit hard-block signal, or
+    * multiple (>= :data:`MULTIPLE_CRITICAL_BLOCK_THRESHOLD`) independent
+      critical-tier risks are present (scenario_10-style multiple high risks),
+      or
+    * a sanctioned/high-risk jurisdiction coincides with a missing GDPR clause
+      and a missing liability cap.
+    """
+    if any(f.get("hard_block") for f in findings):
+        return True
+    critical_count = sum(
+        1 for f in findings if f.get("risk_tier") == "critical"
+    )
+    if critical_count >= MULTIPLE_CRITICAL_BLOCK_THRESHOLD:
+        return True
+    return _has_sanctioned_combination(findings)
 
 
 def _select_decision(
@@ -573,6 +675,17 @@ def _select_decision(
         decision_to_ids.setdefault(decision, []).append(
             str(finding.get("finding_id", ""))
         )
+
+    # Aggregate, cross-finding blocking rule. A single critical finding routes
+    # to its category review; only explicit blocking combinations reject.
+    if _should_block(findings):
+        blocking_ids = _blocking_finding_ids(findings)
+        if blocking_ids:
+            existing = decision_to_ids.setdefault(DECISION_REJECT_OR_BLOCK, [])
+            for finding_id in blocking_ids:
+                if finding_id not in existing:
+                    existing.append(finding_id)
+
     for ids in decision_to_ids.values():
         ids.sort()
 

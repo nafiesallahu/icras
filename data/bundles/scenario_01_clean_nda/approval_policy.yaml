@@ -52,7 +52,7 @@ department_routing:
       - "unknown_vendor"
       - "medium_risk_contract"
 
-  decision_priority:
+decision_priority:
     reject_or_block: 100
     compliance_review_required: 90
     legal_review_required: 80

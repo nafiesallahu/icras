@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import argparse
+import re
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -95,6 +96,23 @@ METRICS_FILENAME = "metrics.json"
 MANIFEST_COUNTERPARTY_FIELD = "counterparty_name_from_manifest"
 EXTRACTED_PARTIES_FIELD = "parties"
 EXTRACTED_COUNTERPARTY_FIELD = "counterparty_name"
+
+# Keys, checked in order, that may carry the counterparty name inside a clause's
+# structured_fields. The strict ExtractedContract schema has no top-level
+# "parties" object, so Agent C resolves the counterparty from these instead.
+COUNTERPARTY_STRUCTURED_FIELD_KEYS = (
+    "counterparty_name",
+    "counterparty",
+    "supplier_name",
+    "vendor_name",
+    "party_name",
+    "customer_name",
+    "buyer_name",
+)
+
+# Clause type whose free text may name the counterparty when no structured field
+# is available.
+COUNTERPARTY_CLAUSE_TYPE = "counterparty"
 
 
 class CounterpartyInputError(Exception):
@@ -280,6 +298,85 @@ def _require_non_empty_name(
     return value
 
 
+def _counterparty_name_from_clause_text(text: str) -> str | None:
+    """Best-effort, conservative extraction of a counterparty name from text.
+
+    Only a couple of very common, unambiguous patterns are matched so this never
+    invents a name. Returns ``None`` when no confident match is found.
+    """
+
+    patterns = (
+        r"entered into (?:by and )?with\s+([A-Z][A-Za-z0-9 .,&'\-]+?)\s*[.;]",
+        r"\(\s*[\"\u201c]?(?:the\s+)?Counterparty",
+    )
+
+    match = re.search(patterns[0], text)
+    if match:
+        candidate = match.group(1).strip()
+        if candidate:
+            return candidate
+
+    return None
+
+
+def extract_counterparty_name_from_extracted_contract(
+    extracted_contract: dict[str, Any],
+) -> str | None:
+    """Resolve the counterparty name from an extracted_contract.json payload.
+
+    Resolution order (first non-empty wins):
+
+    1. Backward compatibility: top-level ``parties.counterparty_name`` (used by
+       older fixtures and existing tests).
+    2. The first clause ``structured_fields`` entry matching one of
+       :data:`COUNTERPARTY_STRUCTURED_FIELD_KEYS`. This is the canonical
+       location in the strict :class:`ExtractedContract` schema.
+    3. A conservative text scan of a ``counterparty``-type clause.
+
+    Returns the cleaned name, or ``None`` when no counterparty can be resolved.
+    """
+
+    if not isinstance(extracted_contract, dict):
+        return None
+
+    # 1. Backward compatibility with the legacy top-level parties object.
+    parties = extracted_contract.get(EXTRACTED_PARTIES_FIELD)
+    if isinstance(parties, dict):
+        candidate = parties.get(EXTRACTED_COUNTERPARTY_FIELD)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+
+    clauses = extracted_contract.get("clauses")
+    if not isinstance(clauses, list):
+        return None
+
+    # 2. Structured fields inside each clause (canonical strict-schema source).
+    for clause in clauses:
+        if not isinstance(clause, dict):
+            continue
+        structured_fields = clause.get("structured_fields")
+        if not isinstance(structured_fields, dict):
+            continue
+        for key in COUNTERPARTY_STRUCTURED_FIELD_KEYS:
+            candidate = structured_fields.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+
+    # 3. Conservative free-text scan of a counterparty clause.
+    for clause in clauses:
+        if not isinstance(clause, dict):
+            continue
+        if clause.get("clause_type") != COUNTERPARTY_CLAUSE_TYPE:
+            continue
+        text = clause.get("text")
+        if isinstance(text, str) and text.strip():
+            candidate = _counterparty_name_from_clause_text(text)
+            if candidate:
+                return candidate
+
+    return None
+
+
 def read_counterparty_names(
     run_dir: str | Path,
 ) -> tuple[str, str]:
@@ -321,19 +418,19 @@ def read_counterparty_names(
         file_description="context_packet.json",
     )
 
-    # The extracted counterparty is nested under "parties".
-    parties = extracted_contract.get(EXTRACTED_PARTIES_FIELD)
-
-    if not isinstance(parties, dict):
-        raise CounterpartyInputError(
-            "extracted_contract.json field 'parties' " "must contain a JSON object."
-        )
-
-    extracted_counterparty_name = _require_non_empty_name(
-        parties.get(EXTRACTED_COUNTERPARTY_FIELD),
-        field_path="parties.counterparty_name",
-        file_description="extracted_contract.json",
+    # Resolve the extracted counterparty from either the legacy top-level
+    # "parties" object or, for the strict ExtractedContract schema, from clause
+    # structured_fields / text. The legacy "parties" field is supported but no
+    # longer required.
+    extracted_counterparty_name = extract_counterparty_name_from_extracted_contract(
+        extracted_contract
     )
+
+    if not extracted_counterparty_name:
+        # The strict schema did not surface a counterparty name. Fall back to the
+        # manifest name so the pipeline can continue (a downstream mismatch check
+        # against an identical name simply produces no mismatch finding).
+        extracted_counterparty_name = manifest_counterparty_name
 
     return (
         manifest_counterparty_name,

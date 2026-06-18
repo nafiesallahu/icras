@@ -95,6 +95,10 @@ def test_orchestrator_outputs_are_deterministic(tmp_path: Path) -> None:
     for name in ("clause_analysis.json", "approval_packet.json", "posting_payload.json"):
         first_data = json.loads((Path(first.run_directory) / name).read_text())
         second_data = json.loads((Path(second.run_directory) / name).read_text())
+        # run_id is intentionally run-specific (Agent A); ignore it when
+        # comparing otherwise-deterministic artifacts across two runs.
+        first_data.pop("run_id", None)
+        second_data.pop("run_id", None)
         assert first_data == second_data
 
     assert first.final_decision == second.final_decision

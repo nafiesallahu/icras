@@ -140,6 +140,10 @@ def test_writes_three_final_artifacts(tmp_path: Path) -> None:
 
     packet = json.loads((run_dir / "approval_packet.json").read_text())
     for key in (
+        "schema_version",
+        "deterministic",
+        "run_id",
+        "bundle_id",
         "final_decision",
         "overall_risk",
         "primary_approval_path",
@@ -153,9 +157,15 @@ def test_writes_three_final_artifacts(tmp_path: Path) -> None:
         "next_actions",
     ):
         assert key in packet, f"missing packet key: {key}"
+    assert packet["schema_version"] == "1.0"
+    assert packet["deterministic"] is True
+    assert "reason" in packet["primary_approval_path"]
 
     payload = json.loads((run_dir / "posting_payload.json").read_text())
     for key in (
+        "schema_version",
+        "run_id",
+        "bundle_id",
         "target_system",
         "contract_id",
         "counterparty",
@@ -164,9 +174,97 @@ def test_writes_three_final_artifacts(tmp_path: Path) -> None:
         "status",
         "approval_required",
         "approvers",
+        "summary",
         "key_findings",
     ):
         assert key in payload, f"missing payload key: {key}"
+    assert payload["schema_version"] == "1.0"
+    for key in (
+        "finding_count",
+        "critical_count",
+        "high_count",
+        "medium_count",
+        "low_count",
+    ):
+        assert key in payload["summary"], f"missing summary key: {key}"
+
+
+# ----------------------------------------------------------------------------
+# Extended output fields (schema_version / run_id / bundle_id / reasons / summary)
+# ----------------------------------------------------------------------------
+def test_extended_output_fields_from_context_packet(tmp_path: Path) -> None:
+    run_dir = _seed(
+        tmp_path / "run",
+        context_packet={
+            "run_id": "run_test_001",
+            "bundle_id": "scenario_03_net_90_payment_terms",
+            "contract_id": "contract_003",
+            "contract_type": "services_agreement",
+            "counterparty_name_from_manifest": "Acme Services GmbH",
+            "jurisdiction": "Germany",
+            "contains_personal_data": True,
+        },
+        # finance (70) + compliance (90) high -> compliance primary, finance secondary.
+        clause_analysis=_clause_analysis(
+            [
+                _scored_finding("RISK-F", category="finance", risk_tier="high", score=85, policy_rule="f"),
+                _scored_finding("RISK-C", category="compliance", risk_tier="high", score=80, policy_rule="c"),
+            ],
+            "high",
+        ),
+    )
+
+    run_triage_agent(run_dir)
+
+    packet = json.loads((run_dir / "approval_packet.json").read_text())
+    assert packet["schema_version"] == "1.0"
+    assert packet["deterministic"] is True
+    assert packet["run_id"] == "run_test_001"
+    assert packet["bundle_id"] == "scenario_03_net_90_payment_terms"
+    assert packet["primary_approval_path"]["reason"]
+    assert packet["secondary_reviews"], "expected a secondary review"
+    secondary = packet["secondary_reviews"][0]
+    assert secondary["decision"] == "finance_review_required"
+    assert secondary["reason"]
+    assert secondary["related_finding_ids"] == ["RISK-F"]
+
+    payload = json.loads((run_dir / "posting_payload.json").read_text())
+    assert payload["schema_version"] == "1.0"
+    assert payload["run_id"] == "run_test_001"
+    assert payload["bundle_id"] == "scenario_03_net_90_payment_terms"
+    assert payload["summary"] == {
+        "finding_count": 2,
+        "critical_count": 0,
+        "high_count": 2,
+        "medium_count": 0,
+        "low_count": 0,
+    }
+
+    exceptions = (run_dir / "exceptions.md").read_text()
+    assert "- Run ID: run_test_001" in exceptions
+    assert "- Bundle ID: scenario_03_net_90_payment_terms" in exceptions
+    assert "- Jurisdiction: Germany" in exceptions
+    assert "- Contains personal data: True" in exceptions
+
+    metrics = json.loads((run_dir / "metrics.json").read_text())
+    assert metrics["overall_risk"] == "high"
+    assert metrics["final_decision"] == "compliance_review_required"
+    assert metrics["approval_required"] is True
+
+
+def test_run_and_bundle_id_default_to_unknown(tmp_path: Path) -> None:
+    run_dir = _seed(
+        tmp_path / "run",
+        context_packet={"contract_id": "contract_003"},
+        clause_analysis=_clause_analysis(
+            [_scored_finding("RISK-001", category="finance", risk_tier="high", score=85, policy_rule="x")],
+            "high",
+        ),
+    )
+    run_triage_agent(run_dir)
+    packet = json.loads((run_dir / "approval_packet.json").read_text())
+    assert packet["run_id"] == "unknown"
+    assert packet["bundle_id"] == "unknown"
 
 
 # ----------------------------------------------------------------------------

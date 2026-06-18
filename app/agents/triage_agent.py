@@ -63,6 +63,7 @@ AUDIT_LOG_FILENAME = "audit_log.md"
 METRICS_FILENAME = "metrics.json"
 
 TARGET_SYSTEM = "ICRAS_CLM_MOCK"
+SCHEMA_VERSION = "1.0"
 
 # Required upstream JSON artifacts. When any of these files *exists* but cannot
 # be parsed as a JSON object, Agent H raises a clear error. A *missing* file
@@ -818,6 +819,27 @@ def _next_actions(
     return actions
 
 
+def _decision_reason(decision: str, related_finding_ids: list[str]) -> str:
+    """Deterministic, human-readable explanation for a routing decision."""
+    if decision == DECISION_AUTO_APPROVE:
+        return "No exceptions found; contract is eligible for automatic approval."
+    if decision == DECISION_REJECT_OR_BLOCK:
+        if related_finding_ids:
+            return (
+                "Blocking or critical finding(s) detected: "
+                + ", ".join(related_finding_ids)
+                + "."
+            )
+        return "Blocking or critical risk detected."
+    if related_finding_ids:
+        return (
+            f"Routed to {decision} due to finding(s): "
+            + ", ".join(related_finding_ids)
+            + "."
+        )
+    return f"Routed to {decision} based on the overall risk assessment."
+
+
 # ----------------------------------------------------------------------------
 # Output shaping
 # ----------------------------------------------------------------------------
@@ -869,13 +891,17 @@ def _write_json(path: Path, payload: dict[str, Any]) -> None:
 def _write_exceptions_md(
     path: Path,
     *,
+    run_id: str,
+    bundle_id: str,
     contract_id: str,
     contract_type: str | None,
     counterparty: str | None,
+    jurisdiction: str | None,
+    contains_personal_data: bool,
     overall_risk: str,
     final_decision: str,
     primary_approver: str,
-    secondary_reviews: list[dict[str, str]],
+    secondary_reviews: list[dict[str, Any]],
     prioritized: list[dict[str, Any]],
     categories: list[dict[str, Any]],
     evidence_summary: dict[str, Any],
@@ -886,9 +912,13 @@ def _write_exceptions_md(
         f"# Exception Report — {contract_id}",
         "",
         "## Summary",
+        f"- Run ID: {run_id}",
+        f"- Bundle ID: {bundle_id}",
         f"- Contract ID: {contract_id}",
         f"- Contract type: {contract_type or 'unknown'}",
         f"- Counterparty: {counterparty or 'unknown'}",
+        f"- Jurisdiction: {jurisdiction or 'unknown'}",
+        f"- Contains personal data: {contains_personal_data}",
         f"- Overall risk: {overall_risk}",
         f"- Final decision: {final_decision}",
         f"- Primary approval path: {primary_approver} ({final_decision})",
@@ -991,6 +1021,7 @@ def _update_metrics(
     *,
     overall_risk: str,
     final_decision: str,
+    approval_required: bool,
     primary_approver: str,
     approvers: list[str],
     prioritized_count: int,
@@ -1025,6 +1056,11 @@ def _update_metrics(
         "duplicates_removed": dedupe_summary.get("duplicates_removed", 0),
     }
     metrics["agents"] = agents
+
+    # Promote the final triage outcome to deterministic top-level metrics.
+    metrics["overall_risk"] = overall_risk
+    metrics["final_decision"] = final_decision
+    metrics["approval_required"] = approval_required
 
     metrics_path.write_text(
         json.dumps(metrics, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
@@ -1095,7 +1131,12 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
     # 6. Approval routing.
     primary_approver = _approver_for_decision(final_decision, approval_policy)
     secondary_reviews = [
-        {"decision": decision, "approver": _approver_for_decision(decision, approval_policy)}
+        {
+            "decision": decision,
+            "approver": _approver_for_decision(decision, approval_policy),
+            "reason": _decision_reason(decision, decision_to_ids.get(decision, [])),
+            "related_finding_ids": list(decision_to_ids.get(decision, [])),
+        }
         for decision in secondary_decisions
     ]
     approvers: list[str] = []
@@ -1106,13 +1147,14 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
         if approver and approver != "none" and approver not in approvers:
             approvers.append(approver)
 
-    # Derived/contextual values.
+    # Derived/contextual values (from context_packet.json when available).
     contract_id = _contract_id(clause_analysis, validation_result, context_packet)
-    contract_type = (
-        _clean_str(context_packet.get("contract_type"))
-        if isinstance(context_packet, dict)
-        else None
-    )
+    cp = context_packet if isinstance(context_packet, dict) else {}
+    contract_type = _clean_str(cp.get("contract_type"))
+    run_id = _clean_str(cp.get("run_id")) or "unknown"
+    bundle_id = _clean_str(cp.get("bundle_id")) or "unknown"
+    jurisdiction = _clean_str(cp.get("jurisdiction"))
+    contains_personal_data = bool(cp.get("contains_personal_data", False))
     counterparty = _counterparty_name(context_packet, normalized_counterparty)
 
     categories = _exception_categories(
@@ -1128,10 +1170,34 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
     key_findings = [_key_finding_view(finding) for finding in prioritized]
 
     approval_required = final_decision != DECISION_AUTO_APPROVE
-    primary_approval_path = {"decision": final_decision, "approver": primary_approver}
+    primary_approval_path = {
+        "decision": final_decision,
+        "approver": primary_approver,
+        "reason": _decision_reason(
+            final_decision, decision_to_ids.get(final_decision, [])
+        ),
+    }
+
+    # Deterministic severity breakdown over the retained (deduped) findings.
+    severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    for finding in prioritized:
+        tier = finding.get("risk_tier")
+        if tier in severity_counts:
+            severity_counts[tier] += 1
+    posting_summary = {
+        "finding_count": len(prioritized),
+        "critical_count": severity_counts["critical"],
+        "high_count": severity_counts["high"],
+        "medium_count": severity_counts["medium"],
+        "low_count": severity_counts["low"],
+    }
 
     # approval_packet.json
     approval_packet = {
+        "schema_version": SCHEMA_VERSION,
+        "deterministic": True,
+        "run_id": run_id,
+        "bundle_id": bundle_id,
         "contract_id": contract_id,
         "contract_type": contract_type,
         "counterparty": counterparty,
@@ -1158,7 +1224,10 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
     else:
         posting_status = "pending_review"
     posting_payload = {
+        "schema_version": SCHEMA_VERSION,
         "target_system": TARGET_SYSTEM,
+        "run_id": run_id,
+        "bundle_id": bundle_id,
         "contract_id": contract_id,
         "counterparty": counterparty,
         "contract_type": contract_type,
@@ -1169,6 +1238,7 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
         "primary_approver": primary_approver,
         "approvers": approvers,
         "exception_categories": [category["category"] for category in categories],
+        "summary": posting_summary,
         "key_findings": key_findings,
     }
     _write_json(run_dir / POSTING_PAYLOAD_FILENAME, posting_payload)
@@ -1176,9 +1246,13 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
     # exceptions.md
     _write_exceptions_md(
         run_dir / EXCEPTIONS_FILENAME,
+        run_id=run_id,
+        bundle_id=bundle_id,
         contract_id=contract_id,
         contract_type=contract_type,
         counterparty=counterparty,
+        jurisdiction=jurisdiction,
+        contains_personal_data=contains_personal_data,
         overall_risk=overall_risk,
         final_decision=final_decision,
         primary_approver=primary_approver,
@@ -1204,6 +1278,7 @@ def run_triage_agent(run_directory: str | Path) -> dict[str, Any]:
         run_dir,
         overall_risk=overall_risk,
         final_decision=final_decision,
+        approval_required=approval_required,
         primary_approver=primary_approver,
         approvers=approvers,
         prioritized_count=len(prioritized_view),
